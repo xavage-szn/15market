@@ -73,6 +73,24 @@ const captureCard = async () => {
 
     const { toPng } = await import('html-to-image');
 
+    // Preload all images as data URLs so html-to-image can serialize them
+    const imgs = el.querySelectorAll('img');
+    const conversions = Array.from(imgs).map(img => {
+      if (img.src && !img.src.startsWith('data:')) {
+        return fetch(img.src)
+          .then(r => r.blob())
+          .then(blob => new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onloadend = () => { img.src = reader.result; resolve(); };
+            reader.readAsDataURL(blob);
+          }))
+          .catch(() => {});
+      }
+      return Promise.resolve();
+    });
+    await Promise.all(conversions);
+    await new Promise(r => setTimeout(r, 100));
+
     const s = el.style;
     const saved = {
       width: s.width, height: s.height, aspectRatio: s.aspectRatio,
@@ -322,7 +340,7 @@ const handleNativeShare = async () => {
               <div className="relative z-10 flex items-center justify-between px-4 pt-5">
                 <div className="w-0 h-0">
                   {/* left-[5px] counteracts the ~11px transparent left padding baked into gowlogo.png so its visible mark sits on the same 16px guide as the asset logo and won amount */}
-                  <img src="/gowlogo.png" alt="15market" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none' }} crossOrigin="anonymous" />
+                  <img src="/gowlogo.png" alt="15market" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none' }} />
                 </div>
               </div>
 
@@ -334,7 +352,7 @@ const handleNativeShare = async () => {
                   <div className="flex items-center gap-3 mb-1 ml-[-23%]">
                     <div className="flex items-center justify-center mt-[1%] ml-[20%]">
                       {logoSrc ? (
-                        <img src={logoSrc} alt={sym} className="h-[109.35px] w-auto object-contain brightness-0 invert" crossOrigin="anonymous" />
+                        <img src={logoSrc} alt={sym} className="h-[109.35px] w-auto object-contain brightness-0 invert" />
                       ) : (
                         <span className="text-white font-black text-2xl">{sym}</span>
                       )}
