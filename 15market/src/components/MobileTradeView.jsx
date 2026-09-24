@@ -712,6 +712,14 @@ export default function MobileTradeView({
   const [searchQuery, setSearchQuery] = useState('');
   const assetWheelRef = useRef(null);
   const [assetWheelIdx, setAssetWheelIdx] = useState(0);
+  const wheelRepeat = 5;
+  const wheelTokens = useMemo(() => {
+    const repeated = [];
+    for (let i = 0; i < wheelRepeat; i++) repeated.push(...tokens);
+    return repeated;
+  }, [tokens]);
+  const singleLen = tokens.length;
+  const wheelMid = Math.floor(wheelRepeat / 2) * singleLen;
   const [selectedDuration, setSelectedDuration] = useState(15);
   const [stakeInput, setStakeInput] = useState('');
   const [sliderPct, setSliderPct] = useState(0);
@@ -878,17 +886,26 @@ useEffect(() => {
     const scrollY = el.scrollTop;
     const center = scrollY + el.clientHeight / 2;
     const idx = Math.round((center - 130) / 60);
-    setAssetWheelIdx(Math.max(0, Math.min(tokens.length - 1, idx)));
+    const clamped = Math.max(0, Math.min(wheelTokens.length - 1, idx));
+    setAssetWheelIdx(clamped);
+
+    const realIdx = clamped % singleLen;
+    const threshold = singleLen * 2;
+    if (clamped < threshold || clamped >= wheelTokens.length - threshold) {
+      const midIdx = wheelMid + realIdx;
+      el.scrollTop = (midIdx - (clamped - idx)) * 60 + (center - 130 - (clamped - idx) * 60);
+    }
   };
 
   useEffect(() => {
     if (assetOpen && assetWheelRef.current) {
       const activeIdx = tokens.findIndex(t => t.id.toLowerCase() === (activeMarket?.id || 'eth').toLowerCase());
       const idx = activeIdx >= 0 ? activeIdx : 0;
-      setAssetWheelIdx(idx);
+      const midIdx = wheelMid + idx;
+      setAssetWheelIdx(midIdx);
       requestAnimationFrame(() => {
         if (assetWheelRef.current) {
-          assetWheelRef.current.scrollTop = idx * 60;
+          assetWheelRef.current.scrollTop = midIdx * 60;
         }
       });
     }
@@ -978,71 +995,74 @@ useEffect(() => {
                 msOverflowStyle: 'none',
                 scrollbarWidth: 'none',
               }}
-              onScroll={(e) => handleAssetWheelScroll(e)}
+              onScroll={() => handleAssetWheelScroll()}
             >
-              {/* Spacer for centering first/last items */}
+              {/* Spacer for centering */}
               <div className="h-[130px]" />
 
-              {tokens.map((t, idx) => {
+              {wheelTokens.map((t, idx) => {
                 const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
                 const logo = LOGO_MAP[t.id.toLowerCase()];
-                const dist = Math.abs((assetWheelIdx ?? 0) - idx);
+                const dist = Math.abs((assetWheelIdx ?? wheelMid) - idx);
                 const isCenter = dist === 0;
                 const isAdjacent = dist === 1;
+                const isFar = dist === 2;
 
                 return (
-                  <button
-                    key={t.id}
-                    disabled={isUnavailable}
-                    onClick={(e) => { e.stopPropagation(); if (!isUnavailable) { pickAsset(t); setAssetOpen(false); } }}
-                    className={`w-full flex items-center justify-center gap-3 px-6 transition-all duration-200 ${
-                      isUnavailable ? 'opacity-30' : 'active:scale-95'
-                    }`}
-                    style={{
-                      height: '60px',
-                      scrollSnapAlign: 'center',
-                    }}
-                  >
-                    {logo ? (
-                      <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
-                        width: isCenter ? '36px' : isAdjacent ? '24px' : '16px',
-                        height: isCenter ? '36px' : isAdjacent ? '24px' : '16px',
-                        filter: getLogoFilter(isLight),
-                        opacity: isCenter ? 1 : isAdjacent ? 0.5 : 0.2,
-                      }} crossOrigin="anonymous" />
-                    ) : (
-                      <span className="font-black transition-all duration-200" style={{
-                        fontSize: isCenter ? '20px' : isAdjacent ? '14px' : '10px',
-                        color: isLight ? '#0a261a' : '#fff',
-                        opacity: isCenter ? 1 : isAdjacent ? 0.5 : 0.2,
-                      }}>{t.symbol[0]}</span>
-                    )}
-                    <span
-                      className="font-black tracking-wider transition-all duration-200"
+                  <div key={`${t.id}-${idx}`}>
+                    <button
+                      disabled={isUnavailable}
+                      onClick={(e) => { e.stopPropagation(); if (!isUnavailable) { pickAsset(t); setAssetOpen(false); } }}
+                      className={`w-full flex items-center justify-center gap-2 px-6 transition-all duration-200 ${
+                        isUnavailable ? 'opacity-30' : 'active:scale-95'
+                      }`}
                       style={{
-                        fontSize: isCenter ? '28px' : isAdjacent ? '18px' : '12px',
-                        color: isLight ? '#0a261a' : '#fff',
-                        opacity: isCenter ? 1 : isAdjacent ? 0.5 : 0.2,
-                        fontFamily: '"Comfortaa", cursive',
+                        height: '60px',
+                        scrollSnapAlign: 'center',
                       }}
                     >
-                      {t.symbol}
-                    </span>
-                  </button>
+                      {logo ? (
+                        <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
+                          width: isCenter ? '29px' : isAdjacent ? '19px' : isFar ? '13px' : '10px',
+                          height: isCenter ? '29px' : isAdjacent ? '19px' : isFar ? '13px' : '10px',
+                          filter: getLogoFilter(isLight),
+                          opacity: isCenter ? 1 : isAdjacent ? 0.5 : isFar ? 0.25 : 0.12,
+                        }} crossOrigin="anonymous" />
+                      ) : (
+                        <span className="font-black transition-all duration-200" style={{
+                          fontSize: isCenter ? '16px' : isAdjacent ? '11px' : '8px',
+                          color: isLight ? '#0a261a' : '#fff',
+                          opacity: isCenter ? 1 : isAdjacent ? 0.5 : isFar ? 0.25 : 0.12,
+                        }}>{t.symbol[0]}</span>
+                      )}
+                      <span
+                        className="font-black tracking-wider transition-all duration-200"
+                        style={{
+                          fontSize: isCenter ? '22px' : isAdjacent ? '14px' : isFar ? '10px' : '8px',
+                          color: isLight ? '#0a261a' : '#fff',
+                          opacity: isCenter ? 1 : isAdjacent ? 0.5 : isFar ? 0.25 : 0.12,
+                          fontFamily: '"Comfortaa", cursive',
+                        }}
+                      >
+                        {t.symbol}
+                      </span>
+                    </button>
+                    {/* Divider line */}
+                    <div
+                      className="mx-8 transition-opacity duration-200"
+                      style={{
+                        height: '1px',
+                        backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+                        opacity: isCenter ? 0.8 : isAdjacent ? 0.4 : 0.15,
+                      }}
+                    />
+                  </div>
                 );
               })}
 
               {/* Spacer for centering */}
               <div className="h-[130px]" />
             </div>
-
-            {/* Confirm button */}
-            <button
-              onClick={(e) => { e.stopPropagation(); setAssetOpen(false); }}
-              className="absolute bottom-8 left-1/2 -translate-x-1/2 px-8 py-2.5 rounded-full bg-[#17A364] text-white font-black text-[13px] tracking-wider shadow-lg active:scale-95 transition-transform"
-            >
-              SELECT
-            </button>
           </motion.div>
         )}
       </AnimatePresence>
