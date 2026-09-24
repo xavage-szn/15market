@@ -1,9 +1,6 @@
 /// <reference lib="WebWorker" />
 /**
  * 15MARKET Service Worker — PWA offline pre-cache only.
- * Phone notifications are handled by OneSignal's own worker
- * (public/push/onesignal/OneSignalSDKWorker.js), registered at the sub-scope
- * /push/onesignal/ so it does not conflict with this root-scope cache worker.
  */
 import { precacheAndRoute } from 'workbox-precaching';
 

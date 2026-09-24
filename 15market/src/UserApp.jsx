@@ -328,41 +328,6 @@ export default function UserApp() {
     localStorage.setItem('15market_theme', theme);
   }, [theme]);
 
-  // ─── OneSignal phone notifications ─────────────────────────────────────
-  // When a user authenticates with a wallet address, identify this browser with
-  // OneSignal.login(address) so the backend can target win/lose trade pushes
-  // (include_external_user_ids: [address]). First-time flow shows OneSignal's
-  // slidedown consent (the native browser prompt only fires after the user taps
-  // Allow); afterwards we only re-identify. The decision is remembered in
-  // localStorage under 15market_push_opt_in.
-  useEffect(() => {
-    let disposed = false;
-
-    const run = async () => {
-      const client = await import('./utils/onesignalClient');
-      if (disposed) return;
-
-      if (!authenticated || !address) {
-        if (client.isConfigured()) await client.logoutOneSignal();
-        return;
-      }
-      const preferred = client.getOptInPreference();
-      if (preferred === 'no') return;
-
-      await client.initOneSignal();
-      await client.loginOneSignal(address);
-
-      if (preferred == null) {
-        await client.promptPushConsent();
-      }
-    };
-
-    run();
-    return () => {
-      disposed = true;
-    };
-  }, [authenticated, address]);
-
   const isLight = theme === 'light';
 
   const toggleTheme = useCallback(() => {
