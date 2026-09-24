@@ -712,14 +712,6 @@ export default function MobileTradeView({
   const [searchQuery, setSearchQuery] = useState('');
   const assetWheelRef = useRef(null);
   const [assetWheelIdx, setAssetWheelIdx] = useState(0);
-  const wheelRepeat = 5;
-  const wheelTokens = useMemo(() => {
-    const repeated = [];
-    for (let i = 0; i < wheelRepeat; i++) repeated.push(...tokens);
-    return repeated;
-  }, [tokens]);
-  const singleLen = tokens.length;
-  const wheelMid = Math.floor(wheelRepeat / 2) * singleLen;
   const [selectedDuration, setSelectedDuration] = useState(15);
   const [stakeInput, setStakeInput] = useState('');
   const [sliderPct, setSliderPct] = useState(0);
@@ -874,6 +866,15 @@ useEffect(() => {
     if (!searchQuery) return list;
     return list.filter(t => (t.symbol || t.id || '').toLowerCase().includes(searchQuery.toLowerCase()));
   }, [defaultTokens, searchQuery]);
+
+  const wheelRepeat = 5;
+  const singleLen = tokens.length;
+  const wheelMid = Math.floor(wheelRepeat / 2) * singleLen;
+  const wheelTokens = useMemo(() => {
+    const repeated = [];
+    for (let i = 0; i < wheelRepeat; i++) repeated.push(...tokens);
+    return repeated;
+  }, [tokens]);
 
   const pickAsset = (t) => {
     handleMarketChange?.(t);
