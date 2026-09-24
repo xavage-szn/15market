@@ -886,11 +886,11 @@ useEffect(() => {
       const activeIdx = tokens.findIndex(t => t.id.toLowerCase() === (activeMarket?.id || 'eth').toLowerCase());
       const idx = activeIdx >= 0 ? activeIdx : 0;
       setAssetWheelIdx(idx);
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         if (assetWheelRef.current) {
-          assetWheelRef.current.scrollTo({ top: idx * 60, behavior: 'smooth' });
+          assetWheelRef.current.scrollTop = idx * 60;
         }
-      }, 50);
+      });
     }
   }, [assetOpen]);
 
@@ -968,12 +968,6 @@ useEffect(() => {
                 : 'linear-gradient(to top, rgba(6,9,7,0.95), transparent)'
             }} />
 
-            {/* Center selection indicator */}
-            <div className="absolute inset-x-4 h-[60px] rounded-2xl pointer-events-none" style={{
-              border: `1.5px solid ${isLight ? 'rgba(23,163,100,0.25)' : 'rgba(23,163,100,0.2)'}`,
-              backgroundColor: isLight ? 'rgba(23,163,100,0.05)' : 'rgba(23,163,100,0.08)',
-            }} />
-
             {/* Scrollable wheel */}
             <div
               ref={assetWheelRef}
@@ -990,21 +984,17 @@ useEffect(() => {
               <div className="h-[130px]" />
 
               {tokens.map((t, idx) => {
-                const isActive = (activeMarket?.id || 'eth').toLowerCase() === t.id.toLowerCase();
                 const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
-                const raw = oraclePrices[t.id.toLowerCase()];
-                const priceStr = raw ? raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : '0.00';
-                const change = changes24h[t.id.toLowerCase()];
-                const changeVal = typeof change === 'object' ? change?.change : change;
-                const isUp = (changeVal ?? 0) >= 0;
                 const logo = LOGO_MAP[t.id.toLowerCase()];
+                const dist = Math.abs((assetWheelIdx ?? 0) - idx);
+                const isCenter = dist === 0;
+                const isAdjacent = dist === 1;
 
                 return (
                   <button
                     key={t.id}
                     disabled={isUnavailable}
                     onClick={(e) => { e.stopPropagation(); if (!isUnavailable) { pickAsset(t); setAssetOpen(false); } }}
-                    data-asset-idx={idx}
                     className={`w-full flex items-center justify-center gap-3 px-6 transition-all duration-200 ${
                       isUnavailable ? 'opacity-30' : 'active:scale-95'
                     }`}
@@ -1015,36 +1005,29 @@ useEffect(() => {
                   >
                     {logo ? (
                       <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
-                        width: assetWheelIdx === idx ? '32px' : '20px',
-                        height: assetWheelIdx === idx ? '32px' : '20px',
+                        width: isCenter ? '36px' : isAdjacent ? '24px' : '16px',
+                        height: isCenter ? '36px' : isAdjacent ? '24px' : '16px',
                         filter: getLogoFilter(isLight),
-                        opacity: assetWheelIdx === idx ? 1 : 0.4,
+                        opacity: isCenter ? 1 : isAdjacent ? 0.5 : 0.2,
                       }} crossOrigin="anonymous" />
                     ) : (
                       <span className="font-black transition-all duration-200" style={{
-                        fontSize: assetWheelIdx === idx ? '18px' : '12px',
+                        fontSize: isCenter ? '20px' : isAdjacent ? '14px' : '10px',
                         color: isLight ? '#0a261a' : '#fff',
-                        opacity: assetWheelIdx === idx ? 1 : 0.4,
+                        opacity: isCenter ? 1 : isAdjacent ? 0.5 : 0.2,
                       }}>{t.symbol[0]}</span>
                     )}
                     <span
                       className="font-black tracking-wider transition-all duration-200"
                       style={{
-                        fontSize: assetWheelIdx === idx ? '26px' : assetWheelIdx !== undefined && Math.abs(assetWheelIdx - idx) === 1 ? '18px' : '13px',
+                        fontSize: isCenter ? '28px' : isAdjacent ? '18px' : '12px',
                         color: isLight ? '#0a261a' : '#fff',
-                        opacity: assetWheelIdx === idx ? 1 : Math.abs((assetWheelIdx ?? 0) - idx) === 1 ? 0.5 : 0.25,
+                        opacity: isCenter ? 1 : isAdjacent ? 0.5 : 0.2,
                         fontFamily: '"Comfortaa", cursive',
                       }}
                     >
                       {t.symbol}
                     </span>
-                    {assetWheelIdx === idx && (
-                      <span className={`text-[12px] font-bold ml-1 transition-opacity duration-200 ${isUp ? 'text-[#17A364]' : 'text-[#EF5350]'}`}
-                        style={{ opacity: assetWheelIdx === idx ? 1 : 0 }}
-                      >
-                        {isUp ? '+' : ''}{parseFloat(changeVal || 0).toFixed(2)}%
-                      </span>
-                    )}
                   </button>
                 );
               })}
