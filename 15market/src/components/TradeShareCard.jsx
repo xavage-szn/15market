@@ -69,12 +69,25 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
 
 const handleDownload = async () => {
     if (!cardRef.current) return;
-    const copyBtn = cardRef.current.querySelector('.copy-id-btn');
+    const el = cardRef.current;
+    const copyBtn = el.querySelector('.copy-id-btn');
     if (copyBtn) copyBtn.style.display = 'none';
+
+    const savedStyles = {
+      borderRadius: el.style.borderRadius,
+      width: el.style.width,
+      aspectRatio: el.style.aspectRatio,
+      transform: el.style.transform,
+      transformOrigin: el.style.transformOrigin,
+    };
+    el.style.borderRadius = '0';
+    el.style.width = '1080px';
+    el.style.aspectRatio = '16 / 9';
+    el.style.transform = 'none';
+    el.style.transformOrigin = 'top left';
+
     try {
-        const dataUrl = await toPng(cardRef.current, {
-            width: 1080,
-            height: 608,
+        const dataUrl = await toPng(el, {
             pixelRatio: 1,
             backgroundColor: '#0a0a0a',
             cacheBust: true,
@@ -89,18 +102,32 @@ const handleDownload = async () => {
     } catch (err) {
         console.error('Download failed:', err);
     } finally {
+        Object.assign(el.style, savedStyles);
         if (copyBtn) copyBtn.style.display = '';
     }
 };
 
 const handleNativeShare = async () => {
     if (!cardRef.current) return;
-    const copyBtn = cardRef.current.querySelector('.copy-id-btn');
+    const el = cardRef.current;
+    const copyBtn = el.querySelector('.copy-id-btn');
     if (copyBtn) copyBtn.style.display = 'none';
+
+    const savedStyles = {
+      borderRadius: el.style.borderRadius,
+      width: el.style.width,
+      aspectRatio: el.style.aspectRatio,
+      transform: el.style.transform,
+      transformOrigin: el.style.transformOrigin,
+    };
+    el.style.borderRadius = '0';
+    el.style.width = '1080px';
+    el.style.aspectRatio = '16 / 9';
+    el.style.transform = 'none';
+    el.style.transformOrigin = 'top left';
+
     try {
-        const dataUrl = await toPng(cardRef.current, {
-            width: 1080,
-            height: 608,
+        const dataUrl = await toPng(el, {
             pixelRatio: 1,
             backgroundColor: '#0a0a0a',
             cacheBust: true,
@@ -117,6 +144,7 @@ const handleNativeShare = async () => {
     } catch (err) {
         handleDownload();
     } finally {
+        Object.assign(el.style, savedStyles);
         if (copyBtn) copyBtn.style.display = '';
     }
 };
@@ -136,7 +164,7 @@ const handleNativeShare = async () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
           style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}
           onClick={onClose}
         >
@@ -145,7 +173,7 @@ const handleNativeShare = async () => {
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full"
+            className="relative w-full max-w-[520px]"
             onClick={(e) => e.stopPropagation()}
             style={{ fontFamily: '"Comfortaa", cursive' }}
           >
@@ -159,10 +187,10 @@ const handleNativeShare = async () => {
             {/* Landscape Card */}
             <div
               ref={cardRef}
-              className="relative overflow-hidden"
+              className="relative rounded-3xl overflow-hidden"
               style={{
                 width: '100%',
-                aspectRatio: '16 / 9',
+                aspectRatio: '520 / 300',
                 background: 'linear-gradient(145deg, #0a0a0a 0%, #111118 40%, #0a0a0a 100%)',
                 fontFamily: '"Comfortaa", cursive'
               }}
@@ -180,7 +208,7 @@ const handleNativeShare = async () => {
 
 
               {/* ═══════ Ultra-Faded Sci-Fi Cyberspace & Sub-Surface Telemetry Background ═══════ */}
-              <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden opacity-[0.45]">
+              <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden rounded-3xl opacity-[0.45]">
                 <svg
                   width="100%" height="100%"
                   viewBox="0 0 520 300"
