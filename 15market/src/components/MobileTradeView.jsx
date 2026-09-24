@@ -1006,8 +1006,8 @@ useEffect(() => {
                 const logo = LOGO_MAP[t.id.toLowerCase()];
                 const dist = Math.abs((assetWheelIdx ?? wheelMid) - idx);
                 const isCenter = dist === 0;
-                const isAdjacent = dist === 1;
-                const isFar = dist === 2;
+                const isNear = dist === 1;
+                const isOuter = dist === 2;
 
                 return (
                   <div key={`${t.id}-${idx}`}>
@@ -1024,24 +1024,24 @@ useEffect(() => {
                     >
                       {logo ? (
                         <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
-                          width: isCenter ? '29px' : isAdjacent ? '19px' : isFar ? '13px' : '10px',
-                          height: isCenter ? '29px' : isAdjacent ? '19px' : isFar ? '13px' : '10px',
+                          width: isCenter ? '29px' : isNear ? '21px' : isOuter ? '15px' : '10px',
+                          height: isCenter ? '29px' : isNear ? '21px' : isOuter ? '15px' : '10px',
                           filter: getLogoFilter(isLight),
-                          opacity: isCenter ? 1 : isAdjacent ? 0.5 : isFar ? 0.25 : 0.12,
+                          opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
                         }} crossOrigin="anonymous" />
                       ) : (
                         <span className="font-black transition-all duration-200" style={{
-                          fontSize: isCenter ? '16px' : isAdjacent ? '11px' : '8px',
+                          fontSize: isCenter ? '16px' : isNear ? '12px' : isOuter ? '9px' : '7px',
                           color: isLight ? '#0a261a' : '#fff',
-                          opacity: isCenter ? 1 : isAdjacent ? 0.5 : isFar ? 0.25 : 0.12,
+                          opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
                         }}>{t.symbol[0]}</span>
                       )}
                       <span
                         className="font-black tracking-wider transition-all duration-200"
                         style={{
-                          fontSize: isCenter ? '22px' : isAdjacent ? '14px' : isFar ? '10px' : '8px',
+                          fontSize: isCenter ? '22px' : isNear ? '15px' : isOuter ? '11px' : '8px',
                           color: isLight ? '#0a261a' : '#fff',
-                          opacity: isCenter ? 1 : isAdjacent ? 0.5 : isFar ? 0.25 : 0.12,
+                          opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
                           fontFamily: '"Comfortaa", cursive',
                         }}
                       >
@@ -1054,7 +1054,7 @@ useEffect(() => {
                       style={{
                         height: '1px',
                         backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
-                        opacity: isCenter ? 0.8 : isAdjacent ? 0.4 : 0.15,
+                        opacity: isCenter ? 0.9 : isNear ? 0.6 : isOuter ? 0.35 : 0.1,
                       }}
                     />
                   </div>
