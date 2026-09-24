@@ -711,7 +711,7 @@ export default function MobileTradeView({
   const [assetOpen, setAssetOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const assetWheelRef = useRef(null);
-  const [assetWheelIdx, setAssetWheelIdx] = useState(0);
+  const [assetWheelIdx, setAssetWheelIdx] = useState(null);
   const [selectedDuration, setSelectedDuration] = useState(15);
   const [stakeInput, setStakeInput] = useState('');
   const [sliderPct, setSliderPct] = useState(0);
@@ -905,9 +905,12 @@ useEffect(() => {
       const midIdx = wheelMid + idx;
       setAssetWheelIdx(midIdx);
       requestAnimationFrame(() => {
-        if (assetWheelRef.current) {
-          assetWheelRef.current.scrollTop = midIdx * 60;
-        }
+        requestAnimationFrame(() => {
+          if (assetWheelRef.current) {
+            assetWheelRef.current.scrollTop = midIdx * 60;
+            handleAssetWheelScroll();
+          }
+        });
       });
     }
   }, [assetOpen]);
