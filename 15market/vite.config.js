@@ -4,6 +4,9 @@ import path from "path";
 import { VitePWA } from 'vite-plugin-pwa';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 export default defineConfig({
+  optimizeDeps: {
+    exclude: ['html-to-image', 'recharts', 'qrcode'],
+  },
   plugins: [
     react(),
     nodePolyfills({
