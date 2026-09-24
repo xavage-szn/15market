@@ -711,10 +711,10 @@ export default function MobileTradeView({
   const [assetOpen, setAssetOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const assetWheelRef = useRef(null);
-  const [assetWheelIdx, setAssetWheelIdx] = useState(0);
   const [selectedDuration, setSelectedDuration] = useState(15);
   const [stakeInput, setStakeInput] = useState('');
   const [sliderPct, setSliderPct] = useState(0);
+  const [wheelActiveIdx, setWheelActiveIdx] = useState(null);
 
   // Global / settled trades for the live market scroller
   const [tickerHistory, setTickerHistory] = useState(() => {
@@ -772,6 +772,7 @@ export default function MobileTradeView({
   const [settledTrade, setSettledTrade] = useState(null);
   const [showOutcome, setShowOutcome] = useState(false);
   const settledTradeIdRef = useRef(null);
+  const outcomeTimerRef = useRef(null);
   const [countdownEnded, setCountdownEnded] = useState(false);
 
   // Timer state for active trade countdown - MUST be declared before any useEffect
@@ -779,8 +780,24 @@ export default function MobileTradeView({
   const [remainingSec, setRemainingSec] = useState(0);
   const [tradeProgress, setTradeProgress] = useState(0);
 
-  // Display each authoritative settlement once. The feed may retain the
-  // settled trade, so do not restart the outcome timer on every render/update.
+  // Safety: if buttons are stuck (trade never resolves), force clear after duration + 30s
+  useEffect(() => {
+    if (!currentActiveTrade) return;
+    const duration = currentActiveTrade.duration || 15;
+    const startTime = currentActiveTrade.startTime || currentActiveTrade.timestamp || Date.now();
+    const timeoutMs = (duration + 30) * 1000;
+    const timer = setTimeout(() => {
+      setActiveTrades(prev => prev.map(t =>
+        ['PENDING', 'RESOLVING'].includes(t.status)
+          ? { ...t, status: 'TIMEOUT', won: undefined, payout: '0.00' }
+          : t
+      ));
+    }, timeoutMs);
+    return () => clearTimeout(timer);
+  }, [currentActiveTrade?.id]);
+
+  // Display each authoritative settlement once.
+  // Uses refs for timer to avoid cleanup issues from changing deps.
   useEffect(() => {
     const settled = activeTrades?.find(t => ['WON', 'LOST', 'PAID'].includes(t.status));
     if (!settled) return;
@@ -792,13 +809,15 @@ export default function MobileTradeView({
 
     setSettledTrade(settled);
     setShowOutcome(true);
-    const timer = setTimeout(() => {
+
+    if (outcomeTimerRef.current) clearTimeout(outcomeTimerRef.current);
+    outcomeTimerRef.current = setTimeout(() => {
       setShowOutcome(false);
       setSettledTrade(null);
       settledTradeIdRef.current = null;
+      outcomeTimerRef.current = null;
     }, 3000);
-    return () => clearTimeout(timer);
-  }, [activeTrades, currentActiveTrade, isExecuting, remainingSec, countdownEnded]);
+  }, [activeTrades, currentActiveTrade, remainingSec, countdownEnded]);
 
   // Auto-detect countdown end: when remainingSec hits 0 and trade is still PENDING,
   // wait a moment then mark countdown as ended so the trade can resolve.
@@ -872,41 +891,24 @@ useEffect(() => {
     setAssetOpen(false);
   };
 
-  const handleAssetWheelScroll = () => {
-    const el = assetWheelRef.current;
-    if (!el) return;
-    const scrollY = el.scrollTop;
-    const center = scrollY + el.clientHeight / 2;
-    const rawIdx = Math.round((center - 130) / 60);
+  const activeAssetIdx = useMemo(() => {
+    if (!tokens.length) return 0;
+    const idx = tokens.findIndex(t => t.id.toLowerCase() === (activeMarket?.id || 'eth').toLowerCase());
+    return idx >= 0 ? idx : 0;
+  }, [tokens, activeMarket]);
+
+  const effectiveActiveIdx = wheelActiveIdx !== null ? wheelActiveIdx : activeAssetIdx;
+
+  const visibleAssets = useMemo(() => {
+    if (!tokens.length) return [];
     const total = tokens.length;
-
-    if (total === 0) return;
-
-    setAssetWheelIdx(rawIdx);
-
-    const bufferCount = 50;
-    const resetPoint = bufferCount * total;
-    if (rawIdx < bufferCount || rawIdx > total + bufferCount) {
-      const realIdx = ((rawIdx % total) + total) % total;
-      const newIdx = resetPoint + realIdx;
-      el.scrollTop = (newIdx * 60) - (center - 130);
-      setAssetWheelIdx(newIdx);
+    const result = [];
+    for (let offset = -2; offset <= 2; offset++) {
+      const idx = ((effectiveActiveIdx + offset) % total + total) % total;
+      result.push({ ...tokens[idx], dist: Math.abs(offset), offset });
     }
-  };
-
-  useEffect(() => {
-    if (assetOpen && assetWheelRef.current && tokens.length > 0) {
-      const activeIdx = tokens.findIndex(t => t.id.toLowerCase() === (activeMarket?.id || 'eth').toLowerCase());
-      const idx = activeIdx >= 0 ? activeIdx : 0;
-      const bufferCount = 50;
-      const virtualIdx = bufferCount * tokens.length + idx;
-      setAssetWheelIdx(virtualIdx);
-      const el = assetWheelRef.current;
-      el.style.scrollBehavior = 'auto';
-      el.scrollTop = virtualIdx * 60;
-      requestAnimationFrame(() => { el.style.scrollBehavior = ''; });
-    }
-  }, [assetOpen]);
+    return result;
+  }, [tokens, effectiveActiveIdx]);
 
   // Slider change handler
   const handleSliderChange = (e) => {
@@ -968,98 +970,75 @@ useEffect(() => {
             }}
             onClick={() => setAssetOpen(false)}
           >
-            {/* Top gradient fade */}
-            <div className="absolute top-0 inset-x-0 h-24 pointer-events-none" style={{
-              background: isLight
-                ? 'linear-gradient(to bottom, rgba(255,255,255,0.95), transparent)'
-                : 'linear-gradient(to bottom, rgba(6,9,7,0.95), transparent)'
-            }} />
-
-            {/* Bottom gradient fade */}
-            <div className="absolute bottom-0 inset-x-0 h-24 pointer-events-none" style={{
-              background: isLight
-                ? 'linear-gradient(to top, rgba(255,255,255,0.95), transparent)'
-                : 'linear-gradient(to top, rgba(6,9,7,0.95), transparent)'
-            }} />
-
-            {/* Scrollable wheel */}
+            {/* Animated wheel */}
             <div
               ref={assetWheelRef}
-              className="relative w-full overflow-y-auto scroll-smooth"
-              style={{
-                height: '320px',
-                scrollSnapType: 'y mandatory',
-                msOverflowStyle: 'none',
-                scrollbarWidth: 'none',
-              }}
-              onScroll={() => handleAssetWheelScroll()}
+              className="relative w-full flex flex-col items-center justify-center"
+              style={{ height: '320px', overflow: 'hidden' }}
             >
-              {/* Spacer for centering */}
-              <div className="h-[130px]" />
+              {visibleAssets.map((t, i) => {
+                const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
+                const logo = LOGO_MAP[t.id.toLowerCase()];
+                const isCenter = t.dist === 0;
+                const isNear = t.dist === 1;
 
-              {tokens.length > 0 && (() => {
-                const total = tokens.length;
-                const virtualCount = 200;
-                const startIdx = assetWheelIdx - Math.floor(virtualCount / 2);
-                const items = [];
-                for (let i = 0; i < virtualCount; i++) {
-                  const vIdx = startIdx + i;
-                  const realIdx = ((vIdx % total) + total) % total;
-                  const t = tokens[realIdx];
-                  if (!t) continue;
-                  const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
-                  const logo = LOGO_MAP[t.id.toLowerCase()];
-                  const dist = Math.abs(i - Math.floor(virtualCount / 2));
-                  const isCenter = dist === 0;
-                  const isNear = dist === 1;
-                  const isOuter = dist === 2;
-
-                  items.push(
-                    <div key={`${t.id}-${vIdx}`}>
-                      <button
-                        disabled={isUnavailable}
-                        onClick={(e) => { e.stopPropagation(); if (!isUnavailable) { pickAsset(t); setAssetOpen(false); } }}
-                        className={`w-full flex items-center justify-center gap-2 px-6 transition-all duration-200 ${
-                          isUnavailable ? 'opacity-30' : 'active:scale-95'
-                        }`}
-                        style={{ height: '60px', scrollSnapAlign: 'center' }}
-                      >
-                        {logo ? (
-                          <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
-                            width: isCenter ? '32px' : isNear ? '26px' : isOuter ? '13px' : '10px',
-                            height: isCenter ? '32px' : isNear ? '26px' : isOuter ? '13px' : '10px',
-                            filter: getLogoFilter(isLight),
-                            opacity: isCenter ? 1 : isNear ? 0.7 : isOuter ? 0.4 : 0.15,
-                          }} crossOrigin="anonymous" />
-                        ) : (
-                          <span className="font-black transition-all duration-200" style={{
-                            fontSize: isCenter ? '22px' : isNear ? '18px' : isOuter ? '10px' : '7px',
-                            color: isLight ? '#0a261a' : '#fff',
-                            opacity: isCenter ? 1 : isNear ? 0.7 : isOuter ? 0.4 : 0.15,
-                          }}>{t.symbol[0]}</span>
-                        )}
-                        <span className="font-black tracking-wider transition-all duration-200" style={{
-                          fontSize: isCenter ? '22px' : isNear ? '18px' : isOuter ? '10px' : '7px',
+                return (
+                  <div key={i} className="w-full flex flex-col items-center">
+                    <button
+                      disabled={isUnavailable}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isUnavailable) return;
+                        if (isCenter) {
+                          handleMarketChange?.(t);
+                          setAssetOpen(false);
+                          setWheelActiveIdx(null);
+                        } else {
+                          setWheelActiveIdx(((effectiveActiveIdx + t.offset) % tokens.length + tokens.length) % tokens.length);
+                        }
+                      }}
+                      className={`w-full flex items-center justify-center gap-2 px-6 ${
+                        isUnavailable ? 'opacity-30' : 'active:scale-95'
+                      }`}
+                      style={{ height: '58px' }}
+                    >
+                      {logo ? (
+                        <img src={logo} alt={t.symbol} className="object-contain shrink-0" style={{
+                          width: isCenter ? '40px' : isNear ? '28px' : '20px',
+                          height: isCenter ? '40px' : isNear ? '28px' : '20px',
+                          filter: getLogoFilter(isLight),
+                          opacity: isCenter ? 1 : isNear ? 0.7 : 0.4,
+                          transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                        }} crossOrigin="anonymous" />
+                      ) : (
+                        <span className="font-black" style={{
+                          fontSize: isCenter ? '24px' : isNear ? '16px' : '10px',
                           color: isLight ? '#0a261a' : '#fff',
-                          opacity: isCenter ? 1 : isNear ? 0.7 : isOuter ? 0.4 : 0.15,
-                          fontFamily: '"Comfortaa", cursive',
-                        }}>
-                          {t.symbol}
-                        </span>
-                      </button>
-                      <div className="mx-8 transition-opacity duration-200" style={{
+                          opacity: isCenter ? 1 : isNear ? 0.7 : 0.4,
+                          transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                        }}>{t.symbol[0]}</span>
+                      )}
+                      <span className="font-black tracking-wider" style={{
+                        fontSize: isCenter ? '28px' : isNear ? '18px' : '12px',
+                        color: isLight ? '#0a261a' : '#fff',
+                        opacity: isCenter ? 1 : isNear ? 0.7 : 0.4,
+                        fontFamily: '"Comfortaa", cursive',
+                        transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+                      }}>
+                        {t.symbol}
+                      </span>
+                    </button>
+                    {i < 4 && (
+                      <div className="w-4/5 mx-auto" style={{
                         height: '1px',
                         backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
-                        opacity: isCenter ? 0.9 : isNear ? 0.6 : isOuter ? 0.35 : 0.1,
+                        opacity: isCenter ? 0.9 : 0.4,
+                        transition: 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
                       }} />
-                    </div>
-                  );
-                }
-                return items;
-              })()}
-
-              {/* Spacer for centering */}
-              <div className="h-[130px]" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         )}
@@ -1072,7 +1051,10 @@ useEffect(() => {
       <div className="flex-1 min-h-[140px] w-full relative pt-1 pb-1" style={{ overflow: 'visible' }}>
         {/* Selected Asset Ticker on Top Left of Chart Widget */}
         <button
-          onClick={() => setAssetOpen(o => !o)}
+          onClick={() => setAssetOpen(o => {
+            if (!o) setWheelActiveIdx(null);
+            return !o;
+          })}
           className="absolute top-3.5 left-5 z-30 flex items-center gap-2 bg-transparent border-none p-1 outline-none cursor-pointer active:scale-95 transition-transform"
         >
           {LOGO_MAP[(activeMarket?.id || 'eth').toLowerCase()] && (
