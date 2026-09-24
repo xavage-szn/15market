@@ -710,6 +710,8 @@ export default function MobileTradeView({
   const isLight = theme === 'light';
   const [assetOpen, setAssetOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const assetWheelRef = useRef(null);
+  const [assetWheelIdx, setAssetWheelIdx] = useState(0);
   const [selectedDuration, setSelectedDuration] = useState(15);
   const [stakeInput, setStakeInput] = useState('');
   const [sliderPct, setSliderPct] = useState(0);
@@ -870,6 +872,28 @@ useEffect(() => {
     setAssetOpen(false);
   };
 
+  const handleAssetWheelScroll = () => {
+    const el = assetWheelRef.current;
+    if (!el) return;
+    const scrollY = el.scrollTop;
+    const center = scrollY + el.clientHeight / 2;
+    const idx = Math.round((center - 130) / 60);
+    setAssetWheelIdx(Math.max(0, Math.min(tokens.length - 1, idx)));
+  };
+
+  useEffect(() => {
+    if (assetOpen && assetWheelRef.current) {
+      const activeIdx = tokens.findIndex(t => t.id.toLowerCase() === (activeMarket?.id || 'eth').toLowerCase());
+      const idx = activeIdx >= 0 ? activeIdx : 0;
+      setAssetWheelIdx(idx);
+      setTimeout(() => {
+        if (assetWheelRef.current) {
+          assetWheelRef.current.scrollTo({ top: idx * 60, behavior: 'smooth' });
+        }
+      }, 50);
+    }
+  }, [assetOpen]);
+
   // Slider change handler
   const handleSliderChange = (e) => {
     const pct = parseFloat(e.target.value);
@@ -914,7 +938,7 @@ useEffect(() => {
         <GlobalTradeScroller theme={theme} />
       </div>
 
-      {/* ─── ASSET SELECTOR DROPDOWN / MODAL ─── */}
+      {/* ─── ASSET SELECTOR WHEEL PICKER ─── */}
       <AnimatePresence>
         {assetOpen && (
           <motion.div
@@ -922,28 +946,50 @@ useEffect(() => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="absolute inset-x-0 top-[44px] bottom-0 z-50 flex flex-col"
+            className="absolute inset-x-0 top-[44px] bottom-0 z-50 flex flex-col items-center justify-center"
             style={{
-              backgroundColor: isLight ? 'rgba(255, 255, 255, 0.98)' : 'rgba(6, 9, 7, 0.98)',
+              backgroundColor: isLight ? 'rgba(255, 255, 255, 0.95)' : 'rgba(6, 9, 7, 0.95)',
+              WebkitBackdropFilter: 'blur(20px)',
+              backdropFilter: 'blur(20px)',
             }}
+            onClick={() => setAssetOpen(false)}
           >
-            {/* Search header */}
-            <div className="flex items-center gap-2 px-4 py-3">
-              <Search size={16} className={isLight ? 'text-gray-400' : 'text-white/40'} />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search market (ETH, BTC, SOL)..."
-                autoFocus
-                className={`flex-1 bg-transparent outline-none text-[14px] font-bold ${
-                  isLight ? 'text-black placeholder:text-gray-400' : 'text-white placeholder:text-white/30'
-                }`}
-              />
-            </div>
+            {/* Top gradient fade */}
+            <div className="absolute top-0 inset-x-0 h-24 pointer-events-none" style={{
+              background: isLight
+                ? 'linear-gradient(to bottom, rgba(255,255,255,0.95), transparent)'
+                : 'linear-gradient(to bottom, rgba(6,9,7,0.95), transparent)'
+            }} />
 
-            {/* Asset items */}
-            <div className="flex-1 overflow-y-auto px-2">
-              {tokens.map((t) => {
+            {/* Bottom gradient fade */}
+            <div className="absolute bottom-0 inset-x-0 h-24 pointer-events-none" style={{
+              background: isLight
+                ? 'linear-gradient(to top, rgba(255,255,255,0.95), transparent)'
+                : 'linear-gradient(to top, rgba(6,9,7,0.95), transparent)'
+            }} />
+
+            {/* Center selection indicator */}
+            <div className="absolute inset-x-4 h-[60px] rounded-2xl pointer-events-none" style={{
+              border: `1.5px solid ${isLight ? 'rgba(23,163,100,0.25)' : 'rgba(23,163,100,0.2)'}`,
+              backgroundColor: isLight ? 'rgba(23,163,100,0.05)' : 'rgba(23,163,100,0.08)',
+            }} />
+
+            {/* Scrollable wheel */}
+            <div
+              ref={assetWheelRef}
+              className="relative w-full overflow-y-auto scroll-smooth"
+              style={{
+                height: '320px',
+                scrollSnapType: 'y mandatory',
+                msOverflowStyle: 'none',
+                scrollbarWidth: 'none',
+              }}
+              onScroll={(e) => handleAssetWheelScroll(e)}
+            >
+              {/* Spacer for centering first/last items */}
+              <div className="h-[130px]" />
+
+              {tokens.map((t, idx) => {
                 const isActive = (activeMarket?.id || 'eth').toLowerCase() === t.id.toLowerCase();
                 const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
                 const raw = oraclePrices[t.id.toLowerCase()];
@@ -957,47 +1003,63 @@ useEffect(() => {
                   <button
                     key={t.id}
                     disabled={isUnavailable}
-                    onClick={() => pickAsset(t)}
-                    className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors rounded-xl ${
-                      isUnavailable ? 'opacity-40' : 'active:bg-[#17A364]/10'
-                    } ${isActive ? 'bg-[#17A364]/10' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); if (!isUnavailable) { pickAsset(t); setAssetOpen(false); } }}
+                    data-asset-idx={idx}
+                    className={`w-full flex items-center justify-center gap-3 px-6 transition-all duration-200 ${
+                      isUnavailable ? 'opacity-30' : 'active:scale-95'
+                    }`}
+                    style={{
+                      height: '60px',
+                      scrollSnapAlign: 'center',
+                    }}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-black/5 dark:bg-white/10">
-                        {logo ? (
-                          <img src={logo} alt={t.symbol} className="w-6 h-6 object-contain" style={{ filter: getLogoFilter(isLight) }} crossOrigin="anonymous" />
-                        ) : (
-                          <span className="text-[12px] font-black">{t.symbol[0]}</span>
-                        )}
-                      </div>
-                      <div>
-                        <div className={`text-[15px] font-black leading-tight ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-                          {t.symbol}
-                        </div>
-                        <div className={`text-[11px] font-bold ${isLight ? 'text-gray-400' : 'text-white/40'}`}>
-                          {t.name}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className={`text-[14px] font-black tabular-nums ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-                        ${priceStr}
-                      </div>
-                      {isUnavailable ? (
-                        <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400">
-                          SOON
-                        </span>
-                      ) : (
-                        <div className={`text-[11px] font-bold ${isUp ? 'text-[#17A364]' : 'text-[#EE4B4B]'}`}>
-                          {isUp ? '+' : ''}{parseFloat(changeVal || 0).toFixed(2)}%
-                        </div>
-                      )}
-                    </div>
+                    {logo ? (
+                      <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
+                        width: assetWheelIdx === idx ? '32px' : '20px',
+                        height: assetWheelIdx === idx ? '32px' : '20px',
+                        filter: getLogoFilter(isLight),
+                        opacity: assetWheelIdx === idx ? 1 : 0.4,
+                      }} crossOrigin="anonymous" />
+                    ) : (
+                      <span className="font-black transition-all duration-200" style={{
+                        fontSize: assetWheelIdx === idx ? '18px' : '12px',
+                        color: isLight ? '#0a261a' : '#fff',
+                        opacity: assetWheelIdx === idx ? 1 : 0.4,
+                      }}>{t.symbol[0]}</span>
+                    )}
+                    <span
+                      className="font-black tracking-wider transition-all duration-200"
+                      style={{
+                        fontSize: assetWheelIdx === idx ? '26px' : assetWheelIdx !== undefined && Math.abs(assetWheelIdx - idx) === 1 ? '18px' : '13px',
+                        color: isLight ? '#0a261a' : '#fff',
+                        opacity: assetWheelIdx === idx ? 1 : Math.abs((assetWheelIdx ?? 0) - idx) === 1 ? 0.5 : 0.25,
+                        fontFamily: '"Comfortaa", cursive',
+                      }}
+                    >
+                      {t.symbol}
+                    </span>
+                    {assetWheelIdx === idx && (
+                      <span className={`text-[12px] font-bold ml-1 transition-opacity duration-200 ${isUp ? 'text-[#17A364]' : 'text-[#EF5350]'}`}
+                        style={{ opacity: assetWheelIdx === idx ? 1 : 0 }}
+                      >
+                        {isUp ? '+' : ''}{parseFloat(changeVal || 0).toFixed(2)}%
+                      </span>
+                    )}
                   </button>
                 );
               })}
+
+              {/* Spacer for centering */}
+              <div className="h-[130px]" />
             </div>
+
+            {/* Confirm button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setAssetOpen(false); }}
+              className="absolute bottom-8 left-1/2 -translate-x-1/2 px-8 py-2.5 rounded-full bg-[#17A364] text-white font-black text-[13px] tracking-wider shadow-lg active:scale-95 transition-transform"
+            >
+              SELECT
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
