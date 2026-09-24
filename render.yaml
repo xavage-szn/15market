@@ -63,9 +63,7 @@ services:
         value: "https://prices.15market.com"
       - key: VITE_PRIVY_APP_ID
         value: "cmisfdm6o00j9jr0d2tjntq58"
-      - key: VITE_ONESIGNAL_APP_ID
-        value: "REPLACE_WITH_ONESIGNAL_APP_ID"
-
+      
   # Admin Frontend Service (Static Site)
   - type: static
     name: 15market-admin

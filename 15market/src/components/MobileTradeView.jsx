@@ -772,6 +772,11 @@ export default function MobileTradeView({
   const settledTradeIdRef = useRef(null);
   const [countdownEnded, setCountdownEnded] = useState(false);
 
+  // Timer state for active trade countdown - MUST be declared before any useEffect
+  // that references remainingSec or tradeProgress in dependency arrays
+  const [remainingSec, setRemainingSec] = useState(0);
+  const [tradeProgress, setTradeProgress] = useState(0);
+
   // Display each authoritative settlement once. The feed may retain the
   // settled trade, so do not restart the outcome timer on every render/update.
   useEffect(() => {
@@ -812,10 +817,6 @@ export default function MobileTradeView({
   }, [remainingSec, currentActiveTrade, livePriceNum, onCountdownEnd]);
 
   const isTradeActive = !!currentActiveTrade || isExecuting || showOutcome;
-
-  // Timer state for active trade countdown
-  const [remainingSec, setRemainingSec] = useState(0);
-  const [tradeProgress, setTradeProgress] = useState(0);
 
 useEffect(() => {
     if (!currentActiveTrade) {
