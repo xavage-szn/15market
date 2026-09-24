@@ -875,23 +875,26 @@ useEffect(() => {
     const pct = parseFloat(e.target.value);
     setSliderPct(pct);
     const maxVal = sessionBalance > 0 ? sessionBalance : 100;
-    const computed = ((pct / 100) * maxVal).toFixed(2);
-    setStakeInput(computed === '0.00' ? '' : computed);
+    const range = maxVal - minStake;
+    const computed = (minStake + (pct / 100) * range).toFixed(2);
+    setStakeInput(computed);
   };
 
   // Stake input change handler
   const handleStakeChange = (e) => {
     const val = e.target.value;
-    setStakeInput(val);
     const num = parseFloat(val) || 0;
+    const effective = num < minStake && val !== '' ? minStake : num;
+    setStakeInput(val === '' ? '' : String(effective));
     const maxVal = sessionBalance > 0 ? sessionBalance : 100;
-    setSliderPct(Math.min(100, Math.max(0, (num / maxVal) * 100)));
+    const range = maxVal - minStake;
+    setSliderPct(range > 0 ? Math.min(100, Math.max(0, ((effective - minStake) / range) * 100)) : 0);
   };
 
   // Trade execution
   const handleTrade = (direction) => {
     const stakeAmt = parseFloat(stakeInput) || 0;
-    if (stakeAmt <= 0) return;
+    if (stakeAmt < minStake) return;
     executeTrade?.({
       direction,
       amount: stakeAmt,
@@ -1129,7 +1132,7 @@ useEffect(() => {
                   value={stakeInput}
                   onChange={handleStakeChange}
                   placeholder="STAKE"
-                  min="0"
+                  min={minStake}
                   step="0.01"
                   className={`w-full text-center font-black text-[14px] uppercase tracking-wider outline-none bg-transparent ${
                     isLight
@@ -1137,6 +1140,9 @@ useEffect(() => {
                       : 'text-[#17A364] placeholder:text-[#17A364]'
                   }`}
                 />
+                <span className={`text-[11px] font-bold whitespace-nowrap ml-1 ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>
+                  ${parseFloat(sessionBalance || 0).toFixed(2)}
+                </span>
               </div>
             </div>
 
