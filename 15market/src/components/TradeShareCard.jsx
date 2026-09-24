@@ -406,36 +406,23 @@ const handleNativeShare = async () => {
               {/* Slanted asset logo watermarks in the right strip */}
               {logoSrc && (
                 <div className="absolute right-0 top-0 bottom-0 w-[52px] overflow-hidden pointer-events-none z-0">
-                  {[
-                    { top: 8, left: 5, rotate: -30, size: 12 },
-                    { top: 35, left: 22, rotate: -15, size: 10 },
-                    { top: 55, left: 8, rotate: -40, size: 11 },
-                    { top: 80, left: 28, rotate: -20, size: 9 },
-                    { top: 100, left: 3, rotate: -35, size: 12 },
-                    { top: 125, left: 20, rotate: -10, size: 10 },
-                    { top: 148, left: 10, rotate: -45, size: 11 },
-                    { top: 170, left: 30, rotate: -25, size: 9 },
-                    { top: 192, left: 6, rotate: -18, size: 12 },
-                    { top: 215, left: 25, rotate: -38, size: 10 },
-                    { top: 240, left: 12, rotate: -12, size: 11 },
-                    { top: 262, left: 32, rotate: -28, size: 9 },
-                    { top: 280, left: 2, rotate: -42, size: 10 },
-                  ].map((pos, i) => (
-                    <img
-                      key={`wm-${i}`}
-                      src={logoSrc}
-                      alt=""
-                      className="absolute brightness-0 invert"
-                      style={{
-                        width: `${pos.size}px`,
-                        height: `${pos.size}px`,
-                        objectFit: 'contain',
-                        opacity: 0.07,
-                        transform: `rotate(${pos.rotate}deg)`,
-                        left: `${pos.left}px`,
-                        top: `${pos.top}px`,
-                      }}
-                    />
+                  {Array.from({ length: 20 }).map((_, i) => (
+                    <div key={`wm-row-${i}`} className="flex items-center gap-[2px] py-[1px]" style={{ transform: 'rotate(-20deg)', marginTop: i === 0 ? '0px' : '-2px' }}>
+                      {[0, 1].map((col) => (
+                        <img
+                          key={`wm-${i}-${col}`}
+                          src={logoSrc}
+                          alt=""
+                          className="brightness-0 invert"
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            objectFit: 'contain',
+                            opacity: 0.06,
+                          }}
+                        />
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}
