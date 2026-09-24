@@ -406,22 +406,19 @@ const handleNativeShare = async () => {
               {/* Slanted asset logo watermarks in the right strip */}
               {logoSrc && (
                 <div className="absolute right-0 top-0 bottom-0 w-[52px] overflow-hidden pointer-events-none z-0">
-                  {Array.from({ length: 20 }).map((_, i) => (
-                    <div key={`wm-row-${i}`} className="flex items-center gap-[2px] py-[1px]" style={{ transform: 'rotate(-20deg)', marginTop: i === 0 ? '0px' : '-2px' }}>
-                      {[0, 1].map((col) => (
-                        <img
-                          key={`wm-${i}-${col}`}
-                          src={logoSrc}
-                          alt=""
-                          className="brightness-0 invert"
-                          style={{
-                            width: '8px',
-                            height: '8px',
-                            objectFit: 'contain',
-                            opacity: 0.06,
-                          }}
-                        />
-                      ))}
+                  {Array.from({ length: 35 }).map((_, i) => (
+                    <div key={`wm-row-${i}`} className="flex items-center justify-center gap-[1px]" style={{ transform: 'rotate(-20deg)', marginTop: '-1px' }}>
+                      <img
+                        src={logoSrc}
+                        alt=""
+                        className="brightness-0 invert"
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          objectFit: 'contain',
+                          opacity: 0.07,
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
