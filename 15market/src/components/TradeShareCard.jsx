@@ -72,31 +72,26 @@ const captureCard = async () => {
     if (!el) return null;
 
     const clone = el.cloneNode(true);
-    clone.style.position = 'fixed';
-    clone.style.left = '-9999px';
-    clone.style.top = '0';
-    clone.style.width = '960px';
-    clone.style.height = '540px';
-    clone.style.borderRadius = '0';
-    clone.style.transform = 'none';
-    clone.style.zIndex = '-1';
-    clone.style.opacity = '1';
-    document.body.appendChild(clone);
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:0;top:0;width:960px;height:540px;overflow:hidden;background:#0a0a0a;';
+    clone.style.cssText = 'width:960px;height:540px;border-radius:0;transform:none;overflow:hidden;';
+    container.appendChild(clone);
+    document.body.appendChild(container);
 
-    const copyBtn = clone.querySelector('.copy-id-btn');
-    if (copyBtn) copyBtn.style.display = 'none';
+    await new Promise(r => setTimeout(r, 200));
 
     try {
-        return await toPng(clone, {
+        const dataUrl = await toPng(container, {
+            width: 960,
+            height: 540,
             pixelRatio: 1,
             backgroundColor: '#0a0a0a',
             cacheBust: true,
-            skipFonts: false,
-            includeInlineStyles: true,
             filter: (node) => !node.classList?.contains('copy-id-btn'),
         });
+        return dataUrl;
     } finally {
-        document.body.removeChild(clone);
+        document.body.removeChild(container);
     }
 };
 
