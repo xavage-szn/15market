@@ -403,6 +403,29 @@ const handleNativeShare = async () => {
                 </div>
               </div>
 
+              {/* Slanted asset logo watermarks in the right strip */}
+              {logoSrc && (
+                <div className="absolute right-0 top-0 bottom-0 w-[52px] overflow-hidden pointer-events-none z-0">
+                  {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                    <img
+                      key={`wm-${i}`}
+                      src={logoSrc}
+                      alt=""
+                      className="absolute brightness-0 invert"
+                      style={{
+                        width: '22px',
+                        height: '22px',
+                        objectFit: 'contain',
+                        opacity: 0.06,
+                        transform: 'rotate(-25deg)',
+                        left: '15px',
+                        top: `${i * 44 - 10}px`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
               {/* QR Code */}
               <div
                 className="absolute right-[97px] top-1/2 translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center"
@@ -484,6 +507,7 @@ const handleNativeShare = async () => {
                 )}
               </AnimatePresence>
 
+            </div>
             </div>
 
             {/* Action Buttons */}
