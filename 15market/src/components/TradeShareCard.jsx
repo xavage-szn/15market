@@ -32,10 +32,8 @@ function getLogo(sym) {
 
 export default function TradeShareCard({ isOpen, onClose, trade, userProfile, theme }) {
   const cardRef = useRef(null);
-  const wrapperRef = useRef(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
-  const [scale, setScale] = useState(1);
 
   const handleCopyTradeId = (e) => {
     e?.stopPropagation?.();
@@ -69,26 +67,15 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
     }
   }, [isOpen, trade, tradeId]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const updateScale = () => {
-      if (wrapperRef.current) {
-        const containerWidth = wrapperRef.current.offsetWidth;
-        setScale(Math.min(1, containerWidth / 520));
-      }
-    };
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, [isOpen]);
-
 const handleDownload = async () => {
     if (!cardRef.current) return;
     const copyBtn = cardRef.current.querySelector('.copy-id-btn');
     if (copyBtn) copyBtn.style.display = 'none';
     try {
         const dataUrl = await toPng(cardRef.current, {
-            pixelRatio: 3,
+            width: 1080,
+            height: 608,
+            pixelRatio: 1,
             backgroundColor: '#0a0a0a',
             cacheBust: true,
             skipFonts: false,
@@ -112,7 +99,9 @@ const handleNativeShare = async () => {
     if (copyBtn) copyBtn.style.display = 'none';
     try {
         const dataUrl = await toPng(cardRef.current, {
-            pixelRatio: 2,
+            width: 1080,
+            height: 608,
+            pixelRatio: 1,
             backgroundColor: '#0a0a0a',
             cacheBust: true,
             skipFonts: false,
@@ -147,7 +136,7 @@ const handleNativeShare = async () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
           style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}
           onClick={onClose}
         >
@@ -156,10 +145,9 @@ const handleNativeShare = async () => {
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            ref={wrapperRef}
-            className="relative w-full max-w-[520px]"
+            className="relative w-full"
             onClick={(e) => e.stopPropagation()}
-            style={{ fontFamily: '"Comfortaa", cursive', height: scale < 1 ? 300 * scale : undefined }}
+            style={{ fontFamily: '"Comfortaa", cursive' }}
           >
             <button
               onClick={onClose}
@@ -171,12 +159,10 @@ const handleNativeShare = async () => {
             {/* Landscape Card */}
             <div
               ref={cardRef}
-              className="relative rounded-3xl overflow-hidden"
+              className="relative overflow-hidden"
               style={{
-                width: 520,
-                height: 300,
-                transform: scale < 1 ? `scale(${scale})` : undefined,
-                transformOrigin: 'top left',
+                width: '100%',
+                aspectRatio: '16 / 9',
                 background: 'linear-gradient(145deg, #0a0a0a 0%, #111118 40%, #0a0a0a 100%)',
                 fontFamily: '"Comfortaa", cursive'
               }}
@@ -194,7 +180,7 @@ const handleNativeShare = async () => {
 
 
               {/* ═══════ Ultra-Faded Sci-Fi Cyberspace & Sub-Surface Telemetry Background ═══════ */}
-              <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden rounded-3xl opacity-[0.45]">
+              <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden opacity-[0.45]">
                 <svg
                   width="100%" height="100%"
                   viewBox="0 0 520 300"
