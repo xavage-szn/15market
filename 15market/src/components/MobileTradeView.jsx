@@ -711,7 +711,7 @@ export default function MobileTradeView({
   const [assetOpen, setAssetOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const assetWheelRef = useRef(null);
-  const [assetWheelIdx, setAssetWheelIdx] = useState(null);
+  const [assetWheelIdx, setAssetWheelIdx] = useState(0);
   const [selectedDuration, setSelectedDuration] = useState(15);
   const [stakeInput, setStakeInput] = useState('');
   const [sliderPct, setSliderPct] = useState(0);
@@ -867,15 +867,6 @@ useEffect(() => {
     return list.filter(t => (t.symbol || t.id || '').toLowerCase().includes(searchQuery.toLowerCase()));
   }, [defaultTokens, searchQuery]);
 
-  const wheelRepeat = 7;
-  const singleLen = tokens.length;
-  const wheelMid = Math.floor(wheelRepeat / 2) * singleLen;
-  const wheelTokens = useMemo(() => {
-    const repeated = [];
-    for (let i = 0; i < wheelRepeat; i++) repeated.push(...tokens);
-    return repeated;
-  }, [tokens]);
-
   const pickAsset = (t) => {
     handleMarketChange?.(t);
     setAssetOpen(false);
@@ -886,18 +877,34 @@ useEffect(() => {
     if (!el) return;
     const scrollY = el.scrollTop;
     const center = scrollY + el.clientHeight / 2;
-    const idx = Math.round((center - 130) / 60);
-    setAssetWheelIdx(Math.max(0, Math.min(wheelTokens.length - 1, idx)));
+    const rawIdx = Math.round((center - 130) / 60);
+    const total = tokens.length;
+
+    if (total === 0) return;
+
+    setAssetWheelIdx(rawIdx);
+
+    const bufferCount = 50;
+    const resetPoint = bufferCount * total;
+    if (rawIdx < bufferCount || rawIdx > total + bufferCount) {
+      const realIdx = ((rawIdx % total) + total) % total;
+      const newIdx = resetPoint + realIdx;
+      el.scrollTop = (newIdx * 60) - (center - 130);
+      setAssetWheelIdx(newIdx);
+    }
   };
 
   useEffect(() => {
-    if (assetOpen && assetWheelRef.current) {
+    if (assetOpen && assetWheelRef.current && tokens.length > 0) {
       const activeIdx = tokens.findIndex(t => t.id.toLowerCase() === (activeMarket?.id || 'eth').toLowerCase());
       const idx = activeIdx >= 0 ? activeIdx : 0;
-      const midIdx = wheelMid + idx;
-      setAssetWheelIdx(midIdx);
+      const bufferCount = 50;
+      const virtualIdx = bufferCount * tokens.length + idx;
+      setAssetWheelIdx(virtualIdx);
       const el = assetWheelRef.current;
-      el.scrollTop = midIdx * 60;
+      el.style.scrollBehavior = 'auto';
+      el.scrollTop = virtualIdx * 60;
+      requestAnimationFrame(() => { el.style.scrollBehavior = ''; });
     }
   }, [assetOpen]);
 
@@ -990,65 +997,66 @@ useEffect(() => {
               {/* Spacer for centering */}
               <div className="h-[130px]" />
 
-              {wheelTokens.map((t, idx) => {
-                const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
-                const logo = LOGO_MAP[t.id.toLowerCase()];
-                const dist = Math.abs((assetWheelIdx ?? wheelMid) - idx);
-                const isCenter = dist === 0;
-                const isNear = dist === 1;
-                const isOuter = dist === 2;
+              {tokens.length > 0 && (() => {
+                const total = tokens.length;
+                const virtualCount = 200;
+                const startIdx = assetWheelIdx - Math.floor(virtualCount / 2);
+                const items = [];
+                for (let i = 0; i < virtualCount; i++) {
+                  const vIdx = startIdx + i;
+                  const realIdx = ((vIdx % total) + total) % total;
+                  const t = tokens[realIdx];
+                  if (!t) continue;
+                  const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
+                  const logo = LOGO_MAP[t.id.toLowerCase()];
+                  const dist = Math.abs(i - Math.floor(virtualCount / 2));
+                  const isCenter = dist === 0;
+                  const isNear = dist === 1;
+                  const isOuter = dist === 2;
 
-                return (
-                  <div key={`${t.id}-${idx}`}>
-                    <button
-                      disabled={isUnavailable}
-                      onClick={(e) => { e.stopPropagation(); if (!isUnavailable) { pickAsset(t); setAssetOpen(false); } }}
-                      className={`w-full flex items-center justify-center gap-2 px-6 transition-all duration-200 ${
-                        isUnavailable ? 'opacity-30' : 'active:scale-95'
-                      }`}
-                      style={{
-                        height: '60px',
-                        scrollSnapAlign: 'center',
-                      }}
-                    >
-                      {logo ? (
-                        <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
-                          width: isCenter ? '29px' : isNear ? '21px' : isOuter ? '15px' : '10px',
-                          height: isCenter ? '29px' : isNear ? '21px' : isOuter ? '15px' : '10px',
-                          filter: getLogoFilter(isLight),
-                          opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
-                        }} crossOrigin="anonymous" />
-                      ) : (
-                        <span className="font-black transition-all duration-200" style={{
-                          fontSize: isCenter ? '16px' : isNear ? '12px' : isOuter ? '9px' : '7px',
-                          color: isLight ? '#0a261a' : '#fff',
-                          opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
-                        }}>{t.symbol[0]}</span>
-                      )}
-                      <span
-                        className="font-black tracking-wider transition-all duration-200"
-                        style={{
+                  items.push(
+                    <div key={`${t.id}-${vIdx}`}>
+                      <button
+                        disabled={isUnavailable}
+                        onClick={(e) => { e.stopPropagation(); if (!isUnavailable) { pickAsset(t); setAssetOpen(false); } }}
+                        className={`w-full flex items-center justify-center gap-2 px-6 transition-all duration-200 ${
+                          isUnavailable ? 'opacity-30' : 'active:scale-95'
+                        }`}
+                        style={{ height: '60px', scrollSnapAlign: 'center' }}
+                      >
+                        {logo ? (
+                          <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
+                            width: isCenter ? '29px' : isNear ? '21px' : isOuter ? '15px' : '10px',
+                            height: isCenter ? '29px' : isNear ? '21px' : isOuter ? '15px' : '10px',
+                            filter: getLogoFilter(isLight),
+                            opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
+                          }} crossOrigin="anonymous" />
+                        ) : (
+                          <span className="font-black transition-all duration-200" style={{
+                            fontSize: isCenter ? '16px' : isNear ? '12px' : isOuter ? '9px' : '7px',
+                            color: isLight ? '#0a261a' : '#fff',
+                            opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
+                          }}>{t.symbol[0]}</span>
+                        )}
+                        <span className="font-black tracking-wider transition-all duration-200" style={{
                           fontSize: isCenter ? '22px' : isNear ? '15px' : isOuter ? '11px' : '8px',
                           color: isLight ? '#0a261a' : '#fff',
                           opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
                           fontFamily: '"Comfortaa", cursive',
-                        }}
-                      >
-                        {t.symbol}
-                      </span>
-                    </button>
-                    {/* Divider line */}
-                    <div
-                      className="mx-8 transition-opacity duration-200"
-                      style={{
+                        }}>
+                          {t.symbol}
+                        </span>
+                      </button>
+                      <div className="mx-8 transition-opacity duration-200" style={{
                         height: '1px',
                         backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
                         opacity: isCenter ? 0.9 : isNear ? 0.6 : isOuter ? 0.35 : 0.1,
-                      }}
-                    />
-                  </div>
-                );
-              })}
+                      }} />
+                    </div>
+                  );
+                }
+                return items;
+              })()}
 
               {/* Spacer for centering */}
               <div className="h-[130px]" />
