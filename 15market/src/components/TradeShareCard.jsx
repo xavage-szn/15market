@@ -1,8 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, Share2, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
-import { toPng } from 'html-to-image';
-import QRCode from 'qrcode';
 
 const LOGO_MAP = {
   eth: '/ethusdc.png',
@@ -58,18 +56,22 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
   useEffect(() => {
     if (isOpen && trade) {
       const verifyUrl = `https://15market.com/verify/${tradeId}`;
-      QRCode.toDataURL(verifyUrl, {
-        width: 100,
-        margin: 1,
-        color: { dark: '#000000', light: '#ffffff' },
-        errorCorrectionLevel: 'M'
-      }).then(setQrDataUrl).catch(() => setQrDataUrl(''));
+      import('qrcode').then(QRCode => {
+        QRCode.default.toDataURL(verifyUrl, {
+          width: 100,
+          margin: 1,
+          color: { dark: '#000000', light: '#ffffff' },
+          errorCorrectionLevel: 'M'
+        }).then(setQrDataUrl).catch(() => setQrDataUrl(''));
+      }).catch(() => setQrDataUrl(''));
     }
   }, [isOpen, trade, tradeId]);
 
 const captureCard = async () => {
     const el = cardRef.current;
     if (!el) return null;
+
+    const { toPng } = await import('html-to-image');
 
     const s = el.style;
     const saved = {
