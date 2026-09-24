@@ -1026,22 +1026,22 @@ useEffect(() => {
                       >
                         {logo ? (
                           <img src={logo} alt={t.symbol} className="object-contain shrink-0 transition-all duration-200" style={{
-                            width: isCenter ? '29px' : isNear ? '21px' : isOuter ? '15px' : '10px',
-                            height: isCenter ? '29px' : isNear ? '21px' : isOuter ? '15px' : '10px',
+                            width: isCenter ? '32px' : isNear ? '26px' : isOuter ? '13px' : '10px',
+                            height: isCenter ? '32px' : isNear ? '26px' : isOuter ? '13px' : '10px',
                             filter: getLogoFilter(isLight),
-                            opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
+                            opacity: isCenter ? 1 : isNear ? 0.7 : isOuter ? 0.4 : 0.15,
                           }} crossOrigin="anonymous" />
                         ) : (
                           <span className="font-black transition-all duration-200" style={{
-                            fontSize: isCenter ? '16px' : isNear ? '12px' : isOuter ? '9px' : '7px',
+                            fontSize: isCenter ? '22px' : isNear ? '18px' : isOuter ? '10px' : '7px',
                             color: isLight ? '#0a261a' : '#fff',
-                            opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
+                            opacity: isCenter ? 1 : isNear ? 0.7 : isOuter ? 0.4 : 0.15,
                           }}>{t.symbol[0]}</span>
                         )}
                         <span className="font-black tracking-wider transition-all duration-200" style={{
-                          fontSize: isCenter ? '22px' : isNear ? '15px' : isOuter ? '11px' : '8px',
+                          fontSize: isCenter ? '22px' : isNear ? '18px' : isOuter ? '10px' : '7px',
                           color: isLight ? '#0a261a' : '#fff',
-                          opacity: isCenter ? 1 : isNear ? 0.6 : isOuter ? 0.4 : 0.15,
+                          opacity: isCenter ? 1 : isNear ? 0.7 : isOuter ? 0.4 : 0.15,
                           fontFamily: '"Comfortaa", cursive',
                         }}>
                           {t.symbol}
