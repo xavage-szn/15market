@@ -27,6 +27,7 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile, evmSes
                     address: address.toLowerCase(),
                     username: username.trim(),
                     avatar: selectedAvatar.trim(),
+                    onboarded: true,
                     onboardedAt: Date.now()
                 })
             });

@@ -28,6 +28,50 @@ function getLogo(sym) {
   return LOGO_MAP[key] || null;
 }
 
+const waitForImage = (image) => {
+  if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    let timeout;
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout);
+      image.removeEventListener('load', handleLoad);
+      image.removeEventListener('error', handleError);
+    };
+    const handleLoad = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = () => {
+      cleanup();
+      reject(new Error('Image failed to load'));
+    };
+    image.addEventListener('load', handleLoad, { once: true });
+    image.addEventListener('error', handleError, { once: true });
+    timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Image load timed out'));
+    }, 10000);
+  });
+};
+
+const createWhiteImageDataUrl = async (image) => {
+  try {
+    await waitForImage(image);
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.drawImage(image, 0, 0);
+    context.globalCompositeOperation = 'source-in';
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return null;
+  }
+};
+
 export default function TradeShareCard({ isOpen, onClose, trade, userProfile, theme }) {
   const cardRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -86,6 +130,13 @@ const captureCard = async () => {
   const el = cardRef.current;
   if (!el) return null;
 
+  const whiteLogoDataUrls = new Map();
+  const logoImages = Array.from(el.querySelectorAll('img[data-card-logo]'));
+  for (const image of logoImages) {
+    const dataUrl = await createWhiteImageDataUrl(image);
+    if (dataUrl) whiteLogoDataUrls.set(image.dataset.cardLogo, dataUrl);
+  }
+
   const { domToPng } = await import('modern-screenshot');
   const s = el.style;
   const saved = {
@@ -106,6 +157,14 @@ const captureCard = async () => {
       backgroundColor: '#0a0a0a',
       drawImageInterval: 200,
       filter: (node) => !node.classList?.contains('copy-id-btn'),
+      onCloneEachNode: (node) => {
+        const logoType = node?.dataset?.cardLogo;
+        const dataUrl = whiteLogoDataUrls.get(logoType);
+        if (!dataUrl) return;
+        node.src = dataUrl;
+        node.classList.remove('brightness-0', 'invert');
+        node.style.setProperty('filter', 'none', 'important');
+      },
     });
   } finally {
     Object.assign(s, saved);
@@ -292,7 +351,7 @@ const handleNativeShare = async () => {
               {/* Top Row */}
               <div className="relative z-10 flex items-center justify-between px-4 pt-5">
                 <div className="w-0 h-0">
-                  <img src="/gowlogo.png" alt="15market" crossOrigin="anonymous" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none', transform: 'translateY(-20%) scale(1.5)', transformOrigin: 'top left' }} />
+                  <img src="/gowlogo.png" alt="15market" data-card-logo="brand" crossOrigin="anonymous" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none', transform: 'translateY(-20%) scale(1.5)', transformOrigin: 'top left' }} />
                 </div>
               </div>
 
@@ -304,7 +363,7 @@ const handleNativeShare = async () => {
                   <div className="flex items-center gap-3 mb-1 ml-[-23%]">
                     <div className={`flex items-center justify-center mt-[1%] ${sym === 'SOL' ? 'ml-[3%]' : 'ml-[20%]'}`}>
                       {logoSrc ? (
-                        <img src={logoSrc} alt={sym} crossOrigin="anonymous" className={`${sym === 'SOL' ? 'h-[131.22px]' : 'h-[109.35px]'} w-auto object-contain brightness-0 invert`} />
+                        <img src={logoSrc} alt={sym} data-card-logo="asset" crossOrigin="anonymous" className={`${sym === 'SOL' ? 'h-[131.22px]' : 'h-[109.35px]'} w-auto object-contain brightness-0 invert`} />
                       ) : (
                         <span className="text-white font-black text-2xl">{sym}</span>
                       )}

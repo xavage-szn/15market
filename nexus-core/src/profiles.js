@@ -30,6 +30,84 @@ function supabaseHeaders() {
     };
 }
 
+const supabaseRequest = async (path, options = {}) => {
+    const { timeout = 8000, ...fetchOptions } = options;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+        return await fetch(`${SUPABASE_URL}${path}`, {
+            ...fetchOptions,
+            signal: controller.signal,
+            headers: { ...supabaseHeaders(), ...(fetchOptions.headers || {}) }
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+function normalizeStoredTrade(trade) {
+    const normalized = { ...trade };
+    for (const [key, value] of Object.entries(normalized)) {
+        if (typeof value === 'bigint') normalized[key] = value.toString();
+    }
+    return normalized;
+}
+
+function tradeToSupabaseRow(address, trade) {
+    const status = trade.status || (trade.won ? 'WON' : 'LOST');
+    const direction = trade.direction === 1 || String(trade.direction).toUpperCase() === '1' || String(trade.direction).toUpperCase() === 'UP'
+        ? 'UP'
+        : 'DOWN';
+    return {
+        id: String(trade.betId || trade.id),
+        user_address: address.toLowerCase(),
+        symbol: String(trade.symbol || trade.asset || '').toLowerCase(),
+        direction,
+        amount: Number(trade.amount || 0),
+        entry_price: trade.entryPrice ?? null,
+        exit_price: trade.exitPrice ?? trade.settlementPrice ?? null,
+        duration: trade.duration ?? null,
+        status,
+        won: !!(trade.won || ['WON', 'PAID'].includes(status)),
+        payout: Number(trade.payout || trade.payoutAmount || 0),
+        fee: Number(trade.fee || 0),
+        pnl: Number(trade.pnl || trade.profit || 0),
+        tx_hash: trade.txHash || trade.tx || null,
+        stake_tx_hash: trade.stakeTxHash || trade.tx || null,
+        settlement_tx_hash: trade.settlementTxHash || null,
+        settled_at: trade.settledAt || null,
+        timestamp: trade.timestamp || trade.createdAt || Date.now(),
+        raw_data: normalizeStoredTrade(trade)
+    };
+}
+
+function supabaseTradeToRecord(row) {
+    const parsed = parseJsonField(row.raw_data);
+    const raw = parsed && typeof parsed === 'object' ? parsed : {};
+    return {
+        ...raw,
+        id: String(row.id),
+        betId: String(row.id),
+        userAddr: row.user_address || raw.userAddr,
+        symbol: String(row.symbol || raw.symbol || '').toUpperCase(),
+        direction: row.direction || raw.direction,
+        amount: Number(row.amount ?? raw.amount ?? 0),
+        entryPrice: row.entry_price != null ? Number(row.entry_price) : raw.entryPrice,
+        exitPrice: row.exit_price != null ? Number(row.exit_price) : raw.exitPrice,
+        duration: row.duration ?? raw.duration,
+        status: row.status || raw.status,
+        won: row.won ?? raw.won,
+        payout: Number(row.payout ?? raw.payout ?? 0),
+        fee: Number(row.fee ?? raw.fee ?? 0),
+        pnl: Number(row.pnl ?? raw.pnl ?? 0),
+        txHash: row.tx_hash || raw.txHash || raw.tx,
+        stakeTxHash: row.stake_tx_hash || raw.stakeTxHash,
+        settlementTxHash: row.settlement_tx_hash || raw.settlementTxHash,
+        settledAt: row.settled_at || raw.settledAt,
+        timestamp: Number(row.timestamp || raw.timestamp || 0)
+    };
+}
+
 // jsonb/text columns can arrive as JSON strings or as native values.
 function parseJsonField(v) {
     if (typeof v === 'string' && (v.trim().startsWith('{') || v.trim().startsWith('['))) {
@@ -41,7 +119,7 @@ function parseJsonField(v) {
 // Map in-memory camelCase profile -> Supabase snake_case row.
 // Undefined keys are dropped (JSON.stringify) so absent fields do not
 // overwrite existing column values on merge-upserts.
-function profileToRow(profile, includeTrades) {
+function profileToRow(profile, includeTrades, includeOnboarding = true) {
     const row = {
         address: profile.address,
         username: profile.username ?? null,
@@ -74,10 +152,16 @@ function profileToRow(profile, includeTrades) {
         wallet_address: profile.walletAddress ?? null,
         updated_at: new Date().toISOString()
     };
+    if (includeOnboarding) {
+        row.onboarded = profile.onboarded === true || !!profile.onboardedAt || !!profile.username;
+        row.onboarded_at = profile.onboardedAt != null
+            ? (typeof profile.onboardedAt === 'number' ? profile.onboardedAt : Date.parse(profile.onboardedAt))
+            : null;
+    }
     // Optional columns (added via supabase-migration.sql). Only sent when
     // the columns actually exist on the table.
     if (includeTrades) {
-        if (Array.isArray(profile.trades)) row.trades = profile.trades;
+        if (Array.isArray(profile.trades)) row.trades = profile.trades.map(normalizeStoredTrade);
         if (Array.isArray(profile.copyTrades)) row.copy_trades = profile.copyTrades;
     }
     return row;
@@ -85,6 +169,9 @@ function profileToRow(profile, includeTrades) {
 
 // Map Supabase row -> in-memory camelCase profile.
 function rowToProfile(row) {
+    const onboardedAt = typeof row.onboarded_at === 'number'
+        ? row.onboarded_at
+        : (row.onboarded_at ? Date.parse(row.onboarded_at) : undefined);
     const p = {
         address: row.address,
         username: row.username,
@@ -112,6 +199,8 @@ function rowToProfile(row) {
         pendingPortfolioRevenue: row.pending_portfolio_revenue != null ? Number(row.pending_portfolio_revenue) : undefined,
         tradingWallet: row.trading_wallet,
         walletAddress: row.wallet_address,
+        onboarded: row.onboarded === true || onboardedAt != null || !!row.username,
+        onboardedAt,
         createdAt: row.created_at ? Date.parse(row.created_at) : undefined,
         updatedAt: row.updated_at ? Date.parse(row.updated_at) : undefined
     };
@@ -126,6 +215,7 @@ class ProfileService {
         this.profiles = {};
         this.sbFullPayload = true;       // false once optional columns are known to be missing
         this.sbColumnsProbed = false;
+        this.sbTradeTableAvailable = null;
         this.sbInitPromise = null;
         this.sbLoggedDisabled = false;
 
@@ -151,6 +241,7 @@ class ProfileService {
         if (this.sbInitPromise) return this.sbInitPromise;
         this.sbInitPromise = (async () => {
             await this.probeSupabaseColumns();
+            await this.probeSupabaseTradeTable();
             await this.loadFromSupabase();
             await this.migrateLocalToSupabase();
         })().catch(e => console.warn('[Supabase] Init failed:', e.message));
@@ -161,7 +252,7 @@ class ProfileService {
         if (this.sbColumnsProbed) return;
         this.sbColumnsProbed = true;
         try {
-            const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=trades,copy_trades&limit=1`, { headers: supabaseHeaders() });
+            const res = await supabaseRequest('/rest/v1/profiles?select=trades,copy_trades&limit=1');
             this.sbFullPayload = res.ok; // 200 = columns exist; 400 (missing column) = slim payloads
             console.log(`[Supabase] Optional columns (trades/copy_trades): ${this.sbFullPayload ? 'present' : 'NOT present — run supabase-migration.sql to persist trade history'}`);
         } catch (e) {
@@ -170,9 +261,23 @@ class ProfileService {
         }
     }
 
+    async probeSupabaseTradeTable() {
+        if (!SUPABASE_ENABLED || this.sbTradeTableAvailable !== null) return;
+        try {
+            const res = await supabaseRequest('/rest/v1/trades?select=id&limit=1');
+            this.sbTradeTableAvailable = res.ok;
+            if (!res.ok) {
+                console.warn('[Supabase] Trades table unavailable — history will use the local fallback until the migration is applied.');
+            }
+        } catch (e) {
+            this.sbTradeTableAvailable = false;
+            console.warn('[Supabase] Trades table probe failed:', e.message);
+        }
+    }
+
     async fetchSupabaseProfiles() {
         const url = `${SUPABASE_URL}/rest/v1/profiles?select=*&limit=1000&offset=0`;
-        const res = await fetch(url, { headers: supabaseHeaders() });
+        const res = await supabaseRequest('/rest/v1/profiles?select=*&limit=1000&offset=0');
         if (!res.ok) throw new Error(`GET ${url} failed (${res.status})`);
         return await res.json();
     }
@@ -210,41 +315,48 @@ class ProfileService {
                 }
             }
             if (migrated > 0) console.log(`[Supabase] Migrated ${migrated} local profile(s) → Supabase.`);
+
+            if (this.sbTradeTableAvailable) {
+                let migratedTrades = 0;
+                for (const addr of Object.keys(this.profiles)) {
+                    const trades = this.profiles[addr].trades || [];
+                    for (const trade of trades) {
+                        if (await this.persistTradeToSupabase(addr, trade, true)) migratedTrades++;
+                    }
+                }
+                if (migratedTrades > 0) console.log(`[Supabase] Migrated ${migratedTrades} local trade(s) → Supabase.`);
+            }
         } catch (e) {
             console.warn('[Supabase] Initial migration failed:', e.message);
         }
     }
 
     async syncToSupabase(addr) {
-        if (!SUPABASE_ENABLED) return;
+        if (!SUPABASE_ENABLED) return false;
         const profile = this.profiles[addr];
-        if (!profile) return;
-        try {
-            let payload = profileToRow(profile, this.sbFullPayload !== false);
-            let res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?on_conflict=address`, {
-                method: 'POST',
-                headers: supabaseHeaders(),
-                body: JSON.stringify(payload)
-            });
-            // If the full payload is rejected (optional columns missing),
-            // fall back to the slim schema payload once.
-            if (!res.ok && this.sbFullPayload !== false) {
-                this.sbFullPayload = false;
-                console.log('[Supabase] Full payload rejected — switching to slim payload (run supabase-migration.sql to persist trade history).');
-                payload = profileToRow(profile, false);
-                res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?on_conflict=address`, {
+        if (!profile) return false;
+
+        const attempts = [
+            profileToRow(profile, this.sbFullPayload !== false, true),
+            profileToRow(profile, false, true),
+            profileToRow(profile, false, false)
+        ];
+        let lastError = '';
+        for (let i = 0; i < attempts.length; i++) {
+            try {
+                const res = await supabaseRequest('/rest/v1/profiles?on_conflict=address', {
                     method: 'POST',
-                    headers: supabaseHeaders(),
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(attempts[i])
                 });
+                if (res.ok) return true;
+                if (i === 0 && this.sbFullPayload !== false) this.sbFullPayload = false;
+                lastError = `${res.status} ${await res.text().catch(() => '')}`.slice(0, 300);
+            } catch (e) {
+                lastError = e.message;
             }
-            if (!res.ok) {
-                const body = await res.text().catch(() => '');
-                console.warn(`[Supabase] Upsert failed for ${addr} (${res.status}):`, body.slice(0, 300));
-            }
-        } catch (e) {
-            console.warn(`[Supabase] Upsert error for ${addr}:`, e.message);
         }
+        console.warn(`[Supabase] Upsert failed for ${addr}: ${lastError}`);
+        return false;
     }
 
     loadFromFile() {
@@ -280,6 +392,11 @@ class ProfileService {
         return this.profiles[address.toLowerCase()];
     }
 
+    async getAsync(address) {
+        await this.initSupabase();
+        return this.get(address);
+    }
+
     getAll() {
         return this.profiles;
     }
@@ -297,6 +414,55 @@ class ProfileService {
         return this.profiles[addr];
     }
 
+    async getHistoryAsync(address) {
+        const addr = address.toLowerCase();
+        await this.initSupabase();
+        if (!this.sbTradeTableAvailable) return this.getHistory(addr);
+
+        try {
+            const res = await supabaseRequest(`/rest/v1/trades?select=*&user_address=eq.${encodeURIComponent(addr)}&order=timestamp.desc&limit=100`);
+            if (!res.ok) {
+                if (res.status >= 400 && res.status < 500) this.sbTradeTableAvailable = false;
+                return this.getHistory(addr);
+            }
+            const rows = await res.json();
+            const trades = (rows || []).map(supabaseTradeToRecord);
+            this.profiles[addr] = {
+                ...(this.profiles[addr] || { address: addr }),
+                trades
+            };
+            return trades;
+        } catch (e) {
+            console.warn(`[Supabase] History read failed for ${addr}:`, e.message);
+            return this.getHistory(addr);
+        }
+    }
+
+    async persistTradeToSupabase(address, trade, skipInit = false) {
+        if (!SUPABASE_ENABLED) return false;
+        if (!skipInit) await this.initSupabase();
+        if (!this.sbTradeTableAvailable) return false;
+        const addr = address.toLowerCase();
+        if (!this.profiles[addr]) return false;
+        if (!(await this.syncToSupabase(addr))) return false;
+
+        try {
+            const res = await supabaseRequest('/rest/v1/trades?on_conflict=id', {
+                method: 'POST',
+                headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify(tradeToSupabaseRow(addr, trade))
+            });
+            if (!res.ok) {
+                console.warn(`[Supabase] Trade upsert failed for ${addr}: ${res.status} ${await res.text().catch(() => '')}`.slice(0, 350));
+                return false;
+            }
+            return true;
+        } catch (e) {
+            console.warn(`[Supabase] Trade upsert error for ${addr}:`, e.message);
+            return false;
+        }
+    }
+
     pushTrade(address, trade) {
         const addr = address.toLowerCase();
         if (!this.profiles[addr]) {
@@ -306,15 +472,14 @@ class ProfileService {
             this.profiles[addr].trades = [];
         }
 
-        // Ensure trade has correct status and winning flag
-        const record = {
+        const tradeId = String(trade.betId || trade.id || `${trade.type || 'record'}-${trade.timestamp || Date.now()}-${addr.slice(-8)}`);
+        const record = normalizeStoredTrade({
             ...trade,
+            id: trade.id || tradeId,
+            betId: trade.betId || tradeId,
             status: trade.status || (trade.won ? 'WON' : 'LOST'),
             timestamp: trade.timestamp || Date.now()
-        };
-
-        // Limit to 100 trades and prevent duplicates
-        const tradeId = String(record.betId || record.id);
+        });
         const exists = this.profiles[addr].trades.some(t => String(t.betId || t.id) === tradeId);
 
         if (!exists) {
@@ -323,15 +488,18 @@ class ProfileService {
                 this.profiles[addr].trades = this.profiles[addr].trades.slice(0, 100);
             }
         } else {
-            // Update existing trade record if it's already there (to capture status updates)
             const idx = this.profiles[addr].trades.findIndex(t => String(t.betId || t.id) === tradeId);
             this.profiles[addr].trades[idx] = { ...this.profiles[addr].trades[idx], ...record };
         }
 
         this.profiles[addr].updatedAt = Date.now();
         this.save().catch(e => console.warn('[Profiles] Background save failed:', e.message));
-        this.syncToSupabase(addr).catch(() => {});
-        return record;
+        return this.persistTradeToSupabase(addr, record)
+            .catch(e => {
+                console.warn(`[Supabase] Trade persistence failed for ${addr}:`, e.message);
+                return false;
+            })
+            .then(() => record);
     }
 
     updateTrade(address, betId, updates) {
@@ -349,7 +517,7 @@ class ProfileService {
 
         profile.updatedAt = Date.now();
         this.save().catch(e => console.warn('[Profiles] Background save failed:', e.message));
-        this.syncToSupabase(addr).catch(() => {});
+        this.persistTradeToSupabase(addr, profile.trades[tradeIdx]).catch(() => {});
         return true;
     }
 
@@ -397,8 +565,8 @@ class ProfileService {
         return profile ? (profile.copyTrades || []) : [];
     }
 
-    getProfileStats(address) {
-        const trades = this.getHistory(address);
+    getProfileStats(address, history = null) {
+        const trades = history || this.getHistory(address);
         let totalWins = 0;
         let totalVolume = 0;
 

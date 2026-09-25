@@ -282,6 +282,8 @@ function mapProfileToDb(profile) {
   if (profile.pendingPortfolioRevenue !== undefined) db.pending_portfolio_revenue = profile.pendingPortfolioRevenue;
   if (profile.tradingWallet !== undefined) db.trading_wallet = profile.tradingWallet;
   if (profile.walletAddress !== undefined) db.wallet_address = profile.walletAddress;
+  if (profile.onboarded !== undefined) db.onboarded = profile.onboarded;
+  if (profile.onboardedAt !== undefined) db.onboarded_at = profile.onboardedAt;
   return db;
 }
 
@@ -314,6 +316,8 @@ function mapProfileFromDb(row) {
     pendingPortfolioRevenue: parseFloat(row.pending_portfolio_revenue || 0),
     tradingWallet: row.trading_wallet,
     walletAddress: row.wallet_address,
+    onboarded: row.onboarded === true || !!row.onboarded_at || !!row.username,
+    onboardedAt: typeof row.onboarded_at === 'number' ? row.onboarded_at : (row.onboarded_at ? Date.parse(row.onboarded_at) : undefined),
     trades: [],       // populated separately
     copyTrades: [],   // populated separately
     createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,

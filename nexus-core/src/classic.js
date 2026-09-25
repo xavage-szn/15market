@@ -570,6 +570,7 @@ class ClassicEngine {
       stakeTxHash: realHash,
     };
     cache.trades.set(trade.id, trade);
+    await cache.pushHistory(userAddr, trade);
 
     this.io.to(userAddr).emit('balance_update', {
       balance: String(session.balance),
@@ -583,6 +584,13 @@ class ClassicEngine {
         console.error(`[Place] #${numericId} tx NOT confirmed. Reverting balance.`);
         cache.trades.delete(trade.id);
         cache.deleteCachedTradeResult(trade.id);
+        cache.pushHistory(userAddr, {
+          ...trade,
+          status: 'CANCELLED',
+          won: false,
+          settledAt: Date.now(),
+          cancelledAt: Date.now()
+        });
         const sess = cache.sessions.get(userAddr);
         if (sess) {
           sess.balance = Number(Math.max(0, sess.balance + amount).toFixed(6));

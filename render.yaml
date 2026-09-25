@@ -19,6 +19,10 @@ services:
       - fromContext: env
         key: REDIS_URL
       - fromContext: env
+        key: SUPABASE_URL
+      - fromContext: env
+        key: SUPABASE_SERVICE_ROLE_KEY
+      - fromContext: env
         key: ROUNDS_CONTRACT_ADDRESS
       - fromContext: env
         key: ADMIN_TOKEN

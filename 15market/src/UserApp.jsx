@@ -379,43 +379,36 @@ export default function UserApp() {
   // const [balance, setBalance] = useState(0); // Removed in favor of evmBalance/sessionBalance logic
   const [direction, setDirection] = useState("DOWN");
   const loadLocalTrades = (userAddress, isHistory, type = 'classic') => {
+    if (type !== 'rounds') return [];
     try {
       if (!userAddress) return [];
-      const prefix = type === 'rounds' ? '15market_rounds' : '15market';
-      const key = isHistory ? `${prefix}_history_${userAddress.toLowerCase()}` : `${prefix}_active_${userAddress.toLowerCase()}`;
+      const key = isHistory ? `15market_rounds_history_${userAddress.toLowerCase()}` : `15market_rounds_active_${userAddress.toLowerCase()}`;
       const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   };
 
-  const [tradeHistory, setTradeHistory] = useState(() => loadLocalTrades(address, true));
-  const [activeTrades, setActiveTrades] = useState(() => loadLocalTrades(address, false));
+  const [tradeHistory, setTradeHistory] = useState([]);
+  const [activeTrades, setActiveTrades] = useState([]);
 
   const lastAddressRef = useRef(address);
 
-  // Preserve local device history by scooping it to the actively connected wallet address
   useEffect(() => {
     if (address && address !== lastAddressRef.current) {
-      setTradeHistory(loadLocalTrades(address, true, 'classic'));
-      setActiveTrades(loadLocalTrades(address, false, 'classic'));
+      setTradeHistory([]);
+      setActiveTrades([]);
       setRoundsTradeHistory(loadLocalTrades(address, true, 'rounds'));
       lastAddressRef.current = address;
     }
   }, [address]);
 
   useEffect(() => {
-    if (address && address === lastAddressRef.current) {
-      localStorage.setItem(`15market_history_${address.toLowerCase()}`, JSON.stringify(tradeHistory));
-    }
     tradeHistoryRef.current = tradeHistory;
-  }, [tradeHistory, address]);
+  }, [tradeHistory]);
 
   useEffect(() => {
-    if (address && address === lastAddressRef.current) {
-      localStorage.setItem(`15market_active_${address.toLowerCase()}`, JSON.stringify(activeTrades));
-    }
     activeTradesRef.current = activeTrades;
-  }, [activeTrades, address]);
+  }, [activeTrades]);
 
   const [timerActive, setTimerActive] = useState(false);
   const [duration, setDuration] = useState(15);
@@ -665,18 +658,16 @@ const performStealthChecks = useCallback(async (addr) => {
             if (profileRes && profileRes.ok) {
                 const pData = await profileRes.json();
                 setUserProfile(pData);
-                // If profile exists on backend (200), never force re-onboarding.
-                // User can set their username later from within the app.
-                setShowOnboarding(false);
-                localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
-                localStorage.setItem(`15market_profile_exists_${addr.toLowerCase()}`, 'true');
-            } else {
-                // Do NOT force onboarding if they are already onboarded locally!
-                if (localOnboarded) {
-                    setShowOnboarding(false);
-                } else {
-                    setShowOnboarding(true);
+                const profileOnboarded = pData.onboarded === true || !!pData.onboardedAt || !!pData.username;
+                setShowOnboarding(!profileOnboarded);
+                if (profileOnboarded) {
+                    localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+                    localStorage.setItem(`15market_profile_exists_${addr.toLowerCase()}`, 'true');
                 }
+            } else if (!profileRes && localOnboarded) {
+                setShowOnboarding(false);
+            } else {
+                setShowOnboarding(true);
             }
 
             // Process session result
@@ -984,10 +975,12 @@ const performStealthChecks = useCallback(async (addr) => {
     // 1. DEDUPLICATE: Only process the most 'final' version of each trade from backend
     // Since backend now returns both Active and History in the same list, they may duplicate.
     const uniqueBackendById = new Map();
+    const backendTradeKey = (t) => String(t.id || t.betId || t.nonce || t.tx || t.txHash || '');
     backendAllRaw.forEach(t => {
-      const id = String(t.id);
+      const id = backendTradeKey(t);
+      if (!id) return;
       const existing = uniqueBackendById.get(id);
-      const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+      const statusOrder = { "PAID": 4, "WON": 4, "LOST": 4, "PAYOUT_FAILED": 4, "CANCELLED": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
       const newStatus = t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING");
 
       if (!existing || statusOrder[newStatus] > statusOrder[existing.status]) {
@@ -1012,7 +1005,7 @@ const performStealthChecks = useCallback(async (addr) => {
       const mergedMap = new Map();
 
       // Helper to get a canonical ID for a trade
-      const getTradeKey = (t) => String(t.id || t.nonce || t.tx || t.txHash || "");
+      const getTradeKey = (t) => String(t.id || t.betId || t.nonce || t.tx || t.txHash || "");
 
       // First, populate with backend trades (Source of Truth)
       backendAll.forEach(bt => {
@@ -1028,7 +1021,7 @@ const performStealthChecks = useCallback(async (addr) => {
         const bt = mergedMap.get(key);
         if (bt) {
           // If in both, merge them with a status hierarchy
-          const statusOrder = { "PAID": 4, "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+          const statusOrder = { "PAID": 4, "WON": 4, "LOST": 4, "PAYOUT_FAILED": 4, "CANCELLED": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
           const finalStatus = (statusOrder[local.status] || 0) > (statusOrder[bt.status] || 0) ? local.status : bt.status;
 
           mergedMap.set(key, {
@@ -1042,10 +1035,10 @@ const performStealthChecks = useCallback(async (addr) => {
             payout: bt.payout || local.payout,
           });
         } else {
-          // If only local, keep it if it's recent or final
-          const isFinal = ["WON", "LOST", "PAID"].includes(local.status);
+          const isOptimistic = local.isOptimistic === true;
+          const isPending = ['PENDING', 'RESOLVING'].includes(local.status);
           const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
-          if (isFinal || isRecent) {
+          if ((isOptimistic && isPending) || (isPending && isRecent)) {
             mergedMap.set(key, local);
           }
         }
@@ -1061,7 +1054,7 @@ const performStealthChecks = useCallback(async (addr) => {
       const now = Date.now();
       const GHOST_GRACE = 5000;
       const mergedMap = new Map();
-      const getTradeKey = (t) => String(t.id || t.nonce || t.tx || t.txHash || "");
+      const getTradeKey = (t) => String(t.id || t.betId || t.nonce || t.tx || t.txHash || "");
 
       // 1. Process Backend Active Trades
       backendAll.filter(t => {
@@ -1146,45 +1139,32 @@ const performStealthChecks = useCallback(async (addr) => {
   const fetchMyProfile = useCallback(async () => {
     if (!address) return;
     try {
-      // STEALTH: Pre-check returning user status via hint
-      // STEALTH: Pre-check returning user status via hint and canonical onboarding flag
-      const canonicalOnboarded = localStorage.getItem(`15market_onboarded_${address.toLowerCase()}`) === "true";
-      const hint = localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`) || (canonicalOnboarded ? "true" : null);
-
       const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`);
       if (res.ok) {
         const data = await res.json();
         if (data && !data.error) {
           setUserProfile(data);
+          const profileOnboarded = data.onboarded === true || !!data.onboardedAt || !!data.username;
+          setShowOnboarding(!profileOnboarded);
+          if (profileOnboarded) {
+            localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
+            localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, "true");
+          }
 
-          // If profile exists on backend (200), never force re-onboarding.
-          // User can set their username later from within the app.
-          setShowOnboarding(false);
-          localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
-          localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, "true");
-
-          // Persistent History Sync: Merge backend profile trades into UI history
           if (Array.isArray(data.trades)) {
             reconcileTrades(data.trades);
           }
-          // AUTO-INIT session wallet for returning users
           if (!evmSessionWallet && !isSignerInitializing) {
             initializeSessionWallet();
           }
         }
       } else if (res.status === 404) {
-        // Profile wiped or never existed — only force onboarding if user was never onboarded
-        if (canonicalOnboarded || hint === "true") {
-          setShowOnboarding(false);
-        } else {
-          setShowOnboarding(true);
-          localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
-          localStorage.removeItem(`15market_onboarded_${address.toLowerCase()}`);
-        }
+        setShowOnboarding(true);
+        localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+        localStorage.removeItem(`15market_onboarded_${address.toLowerCase()}`);
       }
     } catch (e) {
       console.error("Profile fetch error:", e);
-      // In case of network failure, only bypass if they were previously verified
       if (localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`) === "true") {
         setShowOnboarding(false);
       }

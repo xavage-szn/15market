@@ -1211,15 +1211,16 @@ app.post('/session/deposit', async (req, res) => {
   }
 });
 
-app.get('/history/:address', (req, res) => {
+app.get('/history/:address', async (req, res) => {
   const addr = classicEngine.normalizeAddr(req.params.address);
-  
-  // Extract active trades for the user from in-memory cache
-  const activeUserTrades = Array.from(cache.trades.values())
-    .filter(t => String(t.userAddr).toLowerCase() === addr && ['PENDING', 'RESOLVING'].includes(t.status));
-    
-  const historyTrades = cache.getHistory(addr) || [];
-  res.json([...activeUserTrades, ...historyTrades]);
+  try {
+    const activeUserTrades = Array.from(cache.trades.values())
+      .filter(t => String(t.userAddr).toLowerCase() === addr && ['PENDING', 'RESOLVING'].includes(t.status));
+    const historyTrades = await profiles.getHistoryAsync(addr);
+    res.json([...activeUserTrades, ...historyTrades]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── ON-DEMAND SETTLEMENT ─────────────────────────────────────────────────────
@@ -1228,7 +1229,7 @@ app.get('/history/:address', (req, res) => {
 // reconnect) — FAST and ACCURATE, returning the verdict in the HTTP response.
 // Idempotent: reuses the already-locked exit price if one was captured, so the
 // result can never change after countdown zero. Never fabricates a LOST.
-app.post('/trades/:id/settle', (req, res) => {
+app.post('/trades/:id/settle', async (req, res) => {
   const betId = String(req.params.id || '');
   if (!betId) return res.status(400).json({ error: 'Missing bet id' });
   const addrNorm = req.body?.address ? String(req.body.address).toLowerCase() : null;
@@ -1241,7 +1242,7 @@ app.post('/trades/:id/settle', (req, res) => {
   }
 
   if (!trade) {
-    const hist = (addrNorm ? (profiles.getHistory(addrNorm) || []) : [])
+    const hist = (addrNorm ? (await profiles.getHistoryAsync(addrNorm) || []) : [])
       .find(h => String(h.id) === betId || String(h.tradeId) === betId || String(h.betId) === betId);
     if (hist) return res.json({ ...hist, fromHistory: true, betId });
     return res.status(404).json({ error: 'Trade not found', betId });
@@ -1327,40 +1328,58 @@ app.post('/rounds/access/redeem', async (req, res) => {
 
 // ─── PROFILES ─────────────────────────────────────────────────────────────────
 
-app.get('/profiles/:address', (req, res) => {
+app.get('/profiles/:address', async (req, res) => {
   const addr = req.params.address.toLowerCase();
-  const profile = profiles.get(addr);
-  if (!profile) return res.status(404).json({ error: 'Profile not found' });
-  
-  // Extract active trades for the user from in-memory cache
-  const activeUserTrades = Array.from(cache.trades.values())
-    .filter(t => String(t.userAddr).toLowerCase() === addr && ['PENDING', 'RESOLVING'].includes(t.status));
+  try {
+    const profile = await profiles.getAsync(addr);
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
 
-  const historyTrades = profiles.getHistory(addr) || [];
-  const allTrades = [...activeUserTrades, ...historyTrades];
-  
-  // Include trades and computed stats in the profile response for unified sync
-  res.json({
-    ...profile,
-    stats: profiles.getProfileStats(addr),
-    trades: allTrades
-  });
+    const activeUserTrades = Array.from(cache.trades.values())
+      .filter(t => String(t.userAddr).toLowerCase() === addr && ['PENDING', 'RESOLVING'].includes(t.status));
+
+    const historyTrades = await profiles.getHistoryAsync(addr);
+    const allTrades = [...activeUserTrades, ...historyTrades];
+    const onboarded = profile.onboarded === true || !!profile.onboardedAt || !!profile.username;
+
+    res.json({
+      ...profile,
+      onboarded,
+      isInitial: !onboarded,
+      stats: profiles.getProfileStats(addr, historyTrades),
+      trades: allTrades
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/stats/global', (req, res) => {
   res.json(profiles.getGlobalStats());
 });
 
-app.post('/profiles', (req, res) => {
-  const { address, username, xHandle, avatar } = req.body;
+app.post('/profiles', async (req, res) => {
+  const { address, xHandle, avatar, onboardedAt } = req.body;
+  const username = typeof req.body.username === 'string' ? req.body.username.trim() : req.body.username;
   if (!address) return res.status(400).json({ error: 'Address required' });
   const sessionWallet = deriveSessionWallet(address.toLowerCase());
-  const profile = profiles.upsert(address, { username, xHandle, avatar, walletAddress: sessionWallet.address });
-  emitAdminStats(); // Notify admin of new user/profile update
+  const onboarded = req.body.onboarded === true || onboardedAt != null || !!username;
+  const profileData = {
+    username,
+    xHandle,
+    avatar,
+    walletAddress: sessionWallet.address
+  };
+  if (onboarded) {
+    profileData.onboarded = true;
+    profileData.onboardedAt = onboardedAt || Date.now();
+  }
+  const profile = profiles.upsert(address, profileData);
+  await profiles.syncToSupabase(address.toLowerCase());
+  emitAdminStats();
   res.json({ success: true, profile, walletAddress: sessionWallet.address });
 });
 
-app.patch('/profiles/:address', (req, res) => {
+app.patch('/profiles/:address', async (req, res) => {
   const addr = req.params.address.toLowerCase();
 
   // If a new tradingWallet is set, trigger notification & email
@@ -1376,7 +1395,14 @@ app.patch('/profiles/:address', (req, res) => {
     }
   }
 
-  const profile = profiles.upsert(addr, req.body);
+  const updates = { ...req.body };
+  if (typeof updates.username === 'string' && updates.username.trim() && updates.onboarded === undefined) {
+    updates.username = updates.username.trim();
+    updates.onboarded = true;
+    updates.onboardedAt = Date.now();
+  }
+  const profile = profiles.upsert(addr, updates);
+  await profiles.syncToSupabase(addr);
   res.json({ success: true, profile });
 });
 

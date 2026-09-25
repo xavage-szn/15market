@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   pending_portfolio_revenue NUMERIC(20, 6) DEFAULT 0,
   trading_wallet TEXT,                         -- session wallet address for display
   wallet_address TEXT,                         -- linked wallet address
+  onboarded BOOLEAN DEFAULT false,
+  onboarded_at BIGINT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
