@@ -312,7 +312,7 @@ const handleNativeShare = async () => {
               {/* Top Row */}
               <div className="relative z-10 flex items-center justify-between px-4 pt-5">
                 <div className="w-0 h-0">
-                  <img src="/gowlogo.png" alt="15market" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none' }} />
+                  <img src="/gowlogo.png" alt="15market" crossOrigin="anonymous" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none' }} />
                 </div>
               </div>
 
@@ -322,9 +322,9 @@ const handleNativeShare = async () => {
                 <div className="flex-1 min-w-0 flex flex-col justify-between">
                   {/* Asset logo + ticker */}
                   <div className="flex items-center gap-3 mb-1 ml-[-23%]">
-                    <div className="flex items-center justify-center mt-[1%] ml-[20%]">
+                    <div className={`flex items-center justify-center mt-[1%] ${sym === 'SOL' ? 'ml-[3%]' : 'ml-0'}`}>
                       {logoSrc ? (
-                        <img src={logoSrc} alt={sym} className="h-[109.35px] w-auto object-contain brightness-0 invert" />
+                        <img src={logoSrc} alt={sym} crossOrigin="anonymous" className={`${sym === 'SOL' ? 'h-[131.22px]' : 'h-[109.35px]'} w-auto object-contain brightness-0 invert`} />
                       ) : (
                         <span className="text-white font-black text-2xl">{sym}</span>
                       )}
@@ -378,31 +378,11 @@ const handleNativeShare = async () => {
                 <div className="w-[130px] shrink-0" />
               </div>
 
-              {/* Vertical Banner with zigzag edges */}
+              {/* Vertical Banner */}
               <div
                 className="absolute right-[52px] top-0 bottom-0 w-[90px] flex flex-col items-center"
                 style={{ fontFamily: '"Comfortaa", cursive' }}
               >
-                {/* Left zigzag edge */}
-                <svg className="absolute left-0 top-0 h-full w-[10px]" viewBox="0 0 10 300" preserveAspectRatio="none" style={{ transform: 'translateX(-10px)' }}>
-                  {Array.from({ length: 25 }).map((_, i) => (
-                    <polygon
-                      key={`zl-${i}`}
-                      points={`10,${i * 12} 0,${i * 12 + 6} 10,${i * 12 + 12}`}
-                      fill={isWin ? '#17A364' : '#EF5350'}
-                    />
-                  ))}
-                </svg>
-                {/* Right zigzag edge */}
-                <svg className="absolute right-0 top-0 h-full w-[10px]" viewBox="0 0 10 300" preserveAspectRatio="none" style={{ transform: 'translateX(10px)' }}>
-                  {Array.from({ length: 25 }).map((_, i) => (
-                    <polygon
-                      key={`zr-${i}`}
-                      points={`0,${i * 12} 10,${i * 12 + 6} 0,${i * 12 + 12}`}
-                      fill={isWin ? '#17A364' : '#EF5350'}
-                    />
-                  ))}
-                </svg>
                 {/* Banner body */}
                 <div
                   className="w-full h-full overflow-hidden flex flex-col items-center"
@@ -427,22 +407,20 @@ const handleNativeShare = async () => {
                   </div>
                 </div>
               </div>
-              </div>
 
-              {/* Vertical 15market signature in right strip */}
+              {/* 15market signature in right strip */}
+              <style>{`@font-face { font-family: 'Autography'; src: url('/Autography.otf') format('opentype'); }`}</style>
               <div
-                className="absolute right-[14px] top-0 bottom-0 w-[24px] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
+                className="absolute right-0 top-0 bottom-0 w-[52px] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
                 style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
               >
                 <span
                   style={{
-                    fontFamily: '"Georgia", serif',
-                    fontStyle: 'italic',
-                    fontSize: '16px',
-                    letterSpacing: '0.15em',
-                    color: isWin ? 'rgba(23,163,100,0.12)' : 'rgba(239,83,80,0.12)',
+                    fontFamily: '"Halimun", cursive',
+                    fontSize: '22px',
+                    color: isWin ? '#17A364' : '#EF5350',
+                    opacity: 0.3,
                     whiteSpace: 'nowrap',
-                    transform: 'rotate(180deg)',
                   }}
                 >
                   15market
