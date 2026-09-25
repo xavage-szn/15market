@@ -666,15 +666,16 @@ function MobileSteppedChart({
 
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-visible select-none">
-      {/* Centered faint 15market watermark */}
+      {/* Centered faint 15market watermark — theme aware like CustomChart */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-      <img
-          src="/logo.png"
+        <img
+          src={isLight ? '/goblogo.png' : '/gowlogo.png'}
           alt="15market"
-          className="w-[220px] object-contain select-none"
+          className="w-[180px] object-contain select-none"
           style={{
-              opacity: isLight ? 0.12 : 0.1,
-              filter: isLight ? 'grayscale(100%)' : 'grayscale(100%) invert(100%)',
+            opacity: isLight ? 0.05 : 0.08,
+            filter: isLight ? 'grayscale(1) brightness(0.1)' : 'grayscale(1) brightness(0.7)',
+            mixBlendMode: isLight ? 'multiply' : 'screen',
           }}
         />
       </div>

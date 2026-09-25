@@ -10,7 +10,7 @@ import {
   MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
   Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock,
   History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp,
-  Maximize2, RotateCw, Layers, Sun, Moon
+  Layers, Sun, Moon
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
 import { parseEther, parseUnits } from "viem";
@@ -91,55 +91,6 @@ class ErrorBoundary extends Component {
     return this.props.children;
   }
 }
-
-/**
- * Mobile Portrait Lock Component
- * Shown when a mobile/small screen user is in portrait mode.
- * Forces landscape orientation for better V2 UI experience.
- */
-const PortraitPrompt = ({ theme }) => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center p-8 text-center backdrop-blur-3xl`}
-    style={{
-      background: theme === 'light' ? '#ffffff' : 'rgba(5, 5, 5, 0.98)'
-    }}
-  >
-    <div className="relative mb-12">
-      <motion.div
-        animate={{ rotate: 90 }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", repeatDelay: 1 }}
-        className="relative"
-      >
-        <div className="w-32 h-20 rounded-2xl border-4 border-[#17A364]/30 flex items-center justify-center">
-          <div className="w-1 h-8 rounded-full bg-[#17A364]/20 absolute -right-1" />
-          <div className="w-2 h-2 rounded-full bg-[#17A364]/20 absolute left-4" />
-        </div>
-      </motion.div>
-      <motion.div
-        animate={{ opacity: [0, 1, 0], x: [20, 0, -20] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="absolute -top-8 left-1/2 -translate-x-1/2"
-      >
-        <RotateCw className="w-8 h-8 text-[#17A364]" />
-      </motion.div>
-    </div>
-
-    <h2 className="text-3xl font-black text-[#17A364] uppercase tracking-tighter mb-4">
-      Rotate Your Device
-    </h2>
-    <p className="text-white/40 text-sm font-medium max-w-xs leading-relaxed"
-      style={{ color: theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>
-      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#17A364] font-bold">Landscape</span> to access the Precision V2 Terminal.
-    </p>
-
-    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#17A364]/10 border border-[#17A364]/20">
-      <Maximize2 className="w-4 h-4 text-[#17A364]" />
-      <span className="text-[10px] font-black uppercase tracking-widest text-[#17A364]">Desktop Mode Optimization</span>
-    </div>
-  </motion.div>
-);
 
 /**
  * Mobile Bottom History Pane for V2 (Slide-up drawer style)
@@ -847,6 +798,19 @@ const performStealthChecks = useCallback(async (addr) => {
     setToast({ id: Date.now() + Math.random(), message, type, onClick });
   }, []);
 
+  // Receipts are only available once the market has settled. Clicking a still
+  // running trade must not open a win/lose card.
+  const handleViewReceipt = useCallback((trade) => {
+    if (!trade) return;
+    const status = String(trade.status || '').toUpperCase();
+    if (status === 'PENDING' || status === 'RESOLVING' || trade.isPending) {
+      notify('This trade is still live. The receipt unlocks when the market settles.', 'error');
+      return;
+    }
+    setShareTrade(trade);
+    setIsShareCardOpen(true);
+  }, [notify]);
+
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   // Authoritative lock echo: backend verdict (status + settlementPrice) per betId.
   // Written by trade_settled / trade_expired socket handlers so any downstream
@@ -868,9 +832,6 @@ const performStealthChecks = useCallback(async (addr) => {
   const priceProbeRef = useRef({ start: 0, success: 0, fail: 0 });
 
   // Orientation & Device Detection (Decoupled & Robust)
-  const [isPortrait, setIsPortrait] = useState(
-    typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
-  );
   const [isSmallScreen, setIsSmallScreen] = useState(
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false
   );
@@ -878,26 +839,53 @@ const performStealthChecks = useCallback(async (addr) => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    const isMobileDevice = () => {
+      const ua = navigator.userAgent || '';
+      const touch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+      const mobileUa = /Mobi|Android|iPhone|iPad|iPod|Windows Phone|BlackBerry|Opera Mini|IEMobile/i.test(ua);
+      // Touch + small viewport = phone/tablet. Touch on a large screen is a
+      // touchscreen laptop and keeps the desktop layout.
+      const touchHandheld = touch && Math.min(window.innerWidth, window.innerHeight) < 820;
+      return mobileUa || touchHandheld;
+    };
+
+    // Best-effort OS-level lock. Unsupported browsers simply ignore this,
+    // the rotate-back gate below still guarantees the disclaimer page.
+    const requestPortraitLock = () => {
+      try {
+        const orientation = window.screen && window.screen.orientation;
+        if (orientation && typeof orientation.lock === 'function') {
+          const result = orientation.lock('portrait');
+          if (result && typeof result.catch === 'function') result.catch(() => {});
+        }
+      } catch (_) { /* not supported */ }
+    };
+
     const handleResize = () => {
       const portrait = window.innerHeight > window.innerWidth;
       const small = window.innerWidth < 1024;
-      const shortSide = Math.min(window.innerWidth, window.innerHeight);
-      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-      setIsPortrait(portrait);
+      const mobile = isMobileDevice();
       setIsSmallScreen(small && portrait);
-      // Block landscape on mobile-class devices only
-      setIsLandscapeBlocked(!portrait && shortSide < 600 && isMobile);
+      // Portrait-only on mobile-class devices (phones + tablets). Desktop
+      // browsers, including narrow windows, keep the full layout.
+      setIsLandscapeBlocked(!portrait && mobile);
+      if (portrait && mobile) requestPortraitLock();
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
+    if (window.screen && window.screen.orientation && window.screen.orientation.addEventListener) {
+      window.screen.orientation.addEventListener('change', handleResize);
+    }
     handleResize();
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
+      if (window.screen && window.screen.orientation && window.screen.orientation.removeEventListener) {
+        window.screen.orientation.removeEventListener('change', handleResize);
+      }
     };
   }, []);
-
-  const showPortraitLock = false;
 
   const postDebugLog = useCallback((payload) => {
 
@@ -1055,6 +1043,11 @@ const performStealthChecks = useCallback(async (addr) => {
       const GHOST_GRACE = 5000;
       const mergedMap = new Map();
       const getTradeKey = (t) => String(t.id || t.betId || t.nonce || t.tx || t.txHash || "");
+      const finalBackendKeys = new Set(
+        backendAll
+          .filter(t => !['PENDING', 'RESOLVING'].includes(t.status))
+          .map(getTradeKey)
+      );
 
       // 1. Process Backend Active Trades
       backendAll.filter(t => {
@@ -1067,10 +1060,11 @@ const performStealthChecks = useCallback(async (addr) => {
 
         const startTime = (t.timestamp || t.startTime || local?.startTime || now);
         const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
-        const expiryMs = local?.expiryMs || t.expiryMs || (normStart + (t.duration * 1000));
+        const expiryMs = local?.expiryMs || t.expiryMs || (normStart + ((t.duration || 15) * 1000));
 
         // Only keep in active view if not too old
-        if (now <= (expiryMs + GHOST_GRACE)) {
+        const maxAge = ((t.duration || 15) + 60) * 1000;
+        if (now <= (expiryMs + GHOST_GRACE) && (now - normStart) <= maxAge) {
           mergedMap.set(key, {
             ...local,
             ...t,
@@ -1084,10 +1078,13 @@ const performStealthChecks = useCallback(async (addr) => {
       // 2. Process Local Active Trades (might be optimistic)
       prev.forEach(local => {
         const key = getTradeKey(local);
-        if (!key || mergedMap.has(key)) return;
+        if (!key || mergedMap.has(key) || finalBackendKeys.has(key) || removedTradeIds.current.has(key)) return;
+        if (!['PENDING', 'RESOLVING'].includes(local.status)) return;
 
-        const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
-        if (now <= (normExp + GHOST_GRACE)) {
+        const startTime = local.timestamp || local.startTime || now;
+        const normExp = local.expiryMs || (startTime + ((local.duration || 15) * 1000));
+        const maxAge = ((local.duration || 15) + 30) * 1000;
+        if (now <= (normExp + GHOST_GRACE) && (now - startTime) <= maxAge) {
           mergedMap.set(key, { ...local, expiryMs: normExp });
         }
       });
@@ -3010,7 +3007,7 @@ const performStealthChecks = useCallback(async (addr) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${isLight ? 'bg-white' : 'bg-black'}`}
+            className={`fixed inset-0 z-[15000] flex flex-col items-center justify-center ${isLight ? 'bg-white' : 'bg-black'}`}
             style={{ fontFamily: '"Comfortaa", cursive' }}
           >
             {/* Subtle background glow */}
@@ -3044,7 +3041,7 @@ const performStealthChecks = useCallback(async (addr) => {
               Rotate Your Device
             </h2>
             <p className={`text-xs font-medium text-center px-12 leading-relaxed max-w-sm ${isLight ? 'text-[#0a261a]/50' : 'text-white/40'}`}>
-              The 15market trading experience is optimized for portrait mode on mobile devices. Please rotate your phone, or switch to a desktop browser for the full experience.
+              15market on mobile is portrait-only. Please rotate your phone back to portrait mode to continue trading.
             </p>
 
             {/* Subtle brand accent line */}
@@ -3073,7 +3070,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
       <ErrorBoundary>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className={`min-h-screen ${!isSmallScreen ? 'h-screen' : 'h-screen h-[100dvh]'} w-full overflow-hidden font-sans flex flex-col items-center ${themeClass}`}
+          className={`${isLandscapeBlocked ? 'hidden' : 'min-h-screen'} ${!isSmallScreen ? 'h-screen' : 'h-screen h-[100dvh]'} w-full overflow-hidden font-sans flex flex-col items-center ${themeClass}`}
           style={{
             color: theme === 'light' ? '#1f2937' : '#ffffff',
             transition: "color 0.3s ease"
@@ -3100,7 +3097,7 @@ const performStealthChecks = useCallback(async (addr) => {
               isSignerInitializing={isSignerInitializing}
               onRetryInit={initializeSessionWallet}
               transactionHistory={transactionHistory}
-              onViewReceipt={(tx) => { setShareTrade(tx); setIsShareCardOpen(true); }}
+              onViewReceipt={handleViewReceipt}
               uiVersion={uiVersion}
               onOpenCircleWallet={(initialMode) => {
                 setCircleWalletMode(initialMode);
@@ -3321,7 +3318,7 @@ const performStealthChecks = useCallback(async (addr) => {
                     tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
                     showFullHistory={showFullHistory}
                     setShowFullHistory={setShowFullHistory}
-                    onViewReceipt={(tx) => { setShareTrade(tx); setIsShareCardOpen(true); }}
+                    onViewReceipt={handleViewReceipt}
                     gameMode={gameMode}
                     onCountdownEnd={(livePrice) => {
                       setActiveTrades(prev => prev.map(t => {
@@ -3434,8 +3431,8 @@ const performStealthChecks = useCallback(async (addr) => {
                       tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
                       activeTrades={activeTrades}
                       theme={theme}
-                      onViewReceipt={(tx) => { setShareTrade(tx); setIsShareCardOpen(true); }}
-                      onShare={(trade) => { setShareTrade(trade); setIsShareCardOpen(true); }}
+                      onViewReceipt={handleViewReceipt}
+                      onShare={handleViewReceipt}
                       isExpanded={showFullHistory}
                       onToggleExpand={() => setShowFullHistory(!showFullHistory)}
                     />
@@ -3445,9 +3442,6 @@ const performStealthChecks = useCallback(async (addr) => {
                 </div>
               </div>
               )}
-
-                  {/* Forced Orientation Overlay for V2 Mobile */}
-                  {showPortraitLock && <PortraitPrompt theme={theme} />}
 
 
                 </RoundsAccessGate>
@@ -3473,12 +3467,9 @@ const performStealthChecks = useCallback(async (addr) => {
                evmBalance={evmBalance}
                onDeposit={handleDeposit}
                 onWithdraw={handleWithdraw}
-                transactionHistory={transactionHistory}
-                onViewReceipt={(tx) => {
-                  setShareTrade(tx);
-                  setIsShareCardOpen(true);
-                }}
-                notify={notify}
+                 transactionHistory={transactionHistory}
+                 onViewReceipt={handleViewReceipt}
+                 notify={notify}
              />
             </Suspense>
            

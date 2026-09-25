@@ -81,6 +81,18 @@ function tradeToSupabaseRow(address, trade) {
     };
 }
 
+function tradeStatusRank(status) {
+    return {
+        PENDING: 1,
+        RESOLVING: 2,
+        WON: 3,
+        LOST: 3,
+        PAID: 4,
+        PAYOUT_FAILED: 4,
+        CANCELLED: 4
+    }[status] || 0;
+}
+
 function supabaseTradeToRecord(row) {
     const parsed = parseJsonField(row.raw_data);
     const raw = parsed && typeof parsed === 'object' ? parsed : {};
@@ -426,7 +438,26 @@ class ProfileService {
                 return this.getHistory(addr);
             }
             const rows = await res.json();
-            const trades = (rows || []).map(supabaseTradeToRecord);
+            const byId = new Map();
+            for (const trade of (rows || []).map(supabaseTradeToRecord)) {
+                const key = String(trade.id || trade.betId || '');
+                if (key) byId.set(key, trade);
+            }
+            for (const trade of this.getHistory(addr)) {
+                const key = String(trade.id || trade.betId || '');
+                if (!key) continue;
+                const remote = byId.get(key);
+                const localRank = tradeStatusRank(trade.status);
+                const remoteRank = tradeStatusRank(remote?.status);
+                const localTime = Number(trade.settledAt || trade.timestamp || 0);
+                const remoteTime = Number(remote?.settledAt || remote?.timestamp || 0);
+                if (!remote || localRank > remoteRank || (localRank === remoteRank && localTime >= remoteTime)) {
+                    byId.set(key, trade);
+                }
+            }
+            const trades = Array.from(byId.values())
+                .sort((a, b) => (b.timestamp || b.settledAt || 0) - (a.timestamp || a.settledAt || 0))
+                .slice(0, 100);
             this.profiles[addr] = {
                 ...(this.profiles[addr] || { address: addr }),
                 trades

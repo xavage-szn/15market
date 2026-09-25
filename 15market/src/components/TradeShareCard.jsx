@@ -138,37 +138,26 @@ const captureCard = async () => {
   }
 
   const { domToPng } = await import('modern-screenshot');
-  const s = el.style;
-  const saved = {
-    width: s.width, height: s.height, aspectRatio: s.aspectRatio,
-    borderRadius: s.borderRadius, transform: s.transform,
-  };
-  s.width = '520px';
-  s.height = '300px';
-  s.aspectRatio = 'auto';
-  s.borderRadius = '0';
-  s.transform = 'none';
-
-  try {
-    return await domToPng(el, {
-      width: 520,
-      height: 300,
-      scale: 2,
-      backgroundColor: '#0a0a0a',
-      drawImageInterval: 200,
-      filter: (node) => !node.classList?.contains('copy-id-btn'),
-      onCloneEachNode: (node) => {
-        const logoType = node?.dataset?.cardLogo;
-        const dataUrl = whiteLogoDataUrls.get(logoType);
-        if (!dataUrl) return;
-        node.src = dataUrl;
-        node.classList.remove('brightness-0', 'invert');
-        node.style.setProperty('filter', 'none', 'important');
-      },
-    });
-  } finally {
-    Object.assign(s, saved);
-  }
+  return domToPng(el, {
+    width: 520,
+    height: 300,
+    scale: 2,
+    backgroundColor: '#0a0a0a',
+    drawImageInterval: 200,
+    style: {
+      borderRadius: '0px',
+      transform: 'none'
+    },
+    filter: (node) => !node.classList?.contains('copy-id-btn'),
+    onCloneEachNode: (node) => {
+      const logoType = node?.dataset?.cardLogo;
+      const dataUrl = whiteLogoDataUrls.get(logoType);
+      if (!dataUrl) return;
+      node.src = dataUrl;
+      node.classList.remove('brightness-0', 'invert');
+      node.style.setProperty('filter', 'none', 'important');
+    },
+  });
 };
 
 const handleDownload = async () => {
@@ -449,10 +438,8 @@ const handleNativeShare = async () => {
 
               {/* 15market signature in right strip */}
               <style>{`@font-face { font-family: 'Autography'; src: url('/Autography.otf') format('opentype'); }`}</style>
-              <div
-                className="absolute right-0 top-0 bottom-0 w-[52px] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
-                style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-              >
+              <div className="absolute right-0 top-0 bottom-0 w-[52px] flex flex-col items-center justify-center gap-2 pointer-events-none z-0 overflow-hidden">
+                <div className="h-[26px] w-px" style={{ backgroundColor: isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
                 <span
                   style={{
                     fontFamily: '"Autography", cursive',
@@ -460,10 +447,13 @@ const handleNativeShare = async () => {
                     color: isWin ? '#17A364' : '#EF5350',
                     opacity: 0.3,
                     whiteSpace: 'nowrap',
+                    writingMode: 'vertical-rl',
+                    textOrientation: 'mixed'
                   }}
                 >
                   15market
                 </span>
+                <div className="h-[26px] w-px" style={{ backgroundColor: isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
               </div>
 
               {/* QR Code */}
