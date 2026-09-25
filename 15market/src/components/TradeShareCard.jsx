@@ -28,64 +28,6 @@ function getLogo(sym) {
   return LOGO_MAP[key] || null;
 }
 
-const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(reader.result);
-  reader.onerror = () => reject(reader.error || new Error('Unable to read image'));
-  reader.readAsDataURL(blob);
-});
-
-const waitForImage = (image) => {
-  if (image.complete && image.naturalWidth > 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('Image load timed out'));
-    }, 10000);
-    const cleanup = () => {
-      clearTimeout(timeout);
-      image.removeEventListener('load', handleLoad);
-      image.removeEventListener('error', handleError);
-    };
-    const handleLoad = () => {
-      cleanup();
-      resolve();
-    };
-    const handleError = () => {
-      cleanup();
-      reject(new Error('Image failed to load'));
-    };
-    image.addEventListener('load', handleLoad, { once: true });
-    image.addEventListener('error', handleError, { once: true });
-  });
-};
-
-const inlineImage = async (image) => {
-  const source = image.currentSrc || image.src;
-  if (!source || source.startsWith('data:')) return;
-
-  let dataUrl;
-  try {
-    const response = await fetch(source, { cache: 'no-store', mode: 'cors' });
-    if (!response.ok) throw new Error(`Image request failed: ${response.status}`);
-    dataUrl = await blobToDataUrl(await response.blob());
-  } catch (fetchError) {
-    if (!image.naturalWidth || !image.naturalHeight) throw fetchError;
-    const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    const context = canvas.getContext('2d');
-    if (!context) throw fetchError;
-    context.drawImage(image, 0, 0);
-    dataUrl = canvas.toDataURL('image/png');
-  }
-
-  const probe = new Image();
-  probe.src = dataUrl;
-  await waitForImage(probe);
-  image.src = dataUrl;
-};
-
 export default function TradeShareCard({ isOpen, onClose, trade, userProfile, theme }) {
   const cardRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -144,10 +86,7 @@ const captureCard = async () => {
   const el = cardRef.current;
   if (!el) return null;
 
-  const { toPng } = await import('html-to-image');
-  const images = Array.from(el.querySelectorAll('img'));
-  await Promise.all(images.map(inlineImage));
-
+  const { domToPng } = await import('modern-screenshot');
   const s = el.style;
   const saved = {
     width: s.width, height: s.height, aspectRatio: s.aspectRatio,
@@ -160,12 +99,12 @@ const captureCard = async () => {
   s.transform = 'none';
 
   try {
-    return await toPng(el, {
+    return await domToPng(el, {
       width: 520,
       height: 300,
-      pixelRatio: 2,
+      scale: 2,
       backgroundColor: '#0a0a0a',
-      cacheBust: false,
+      drawImageInterval: 200,
       filter: (node) => !node.classList?.contains('copy-id-btn'),
     });
   } finally {
