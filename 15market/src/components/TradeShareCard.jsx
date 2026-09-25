@@ -378,7 +378,7 @@ const handleNativeShare = async () => {
                 <div className="w-[130px] shrink-0" />
               </div>
 
-              {/* Vertical Banner */}
+              {/* Vertical Banner with zigzag edges */}
               <div
                 className="absolute right-[52px] top-0 bottom-0 w-[90px] overflow-hidden flex flex-col items-center"
                 style={{
@@ -386,7 +386,25 @@ const handleNativeShare = async () => {
                     ? 'linear-gradient(180deg, #17A364 0%, #0d6b42 100%)'
                     : 'linear-gradient(180deg, #EF5350 0%, #c62828 100%)',
                   boxShadow: '-10px 0 30px rgba(0,0,0,0.7), 10px 0 30px rgba(0,0,0,0.7), 0 0 25px rgba(0,0,0,0.5)',
-                  fontFamily: '"Comfortaa", cursive'
+                  fontFamily: '"Comfortaa", cursive',
+                  clipPath: (() => {
+                    const w = 90, h = 300, teeth = 20, depth = 6;
+                    const step = h / teeth;
+                    const pts = [];
+                    // Left edge zigzag (top to bottom)
+                    for (let i = 0; i <= teeth; i++) {
+                      const y = i * step;
+                      const x = i % 2 === 0 ? depth : 0;
+                      pts.push(`${x} ${y}`);
+                    }
+                    // Right edge zigzag (bottom to top)
+                    for (let i = teeth; i >= 0; i--) {
+                      const y = i * step;
+                      const x = i % 2 === 0 ? w - depth : w;
+                      pts.push(`${x} ${y}`);
+                    }
+                    return `polygon(${pts.join(', ')})`;
+                  })(),
                 }}
               >
                 <div className="absolute inset-0 opacity-[0.15] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
