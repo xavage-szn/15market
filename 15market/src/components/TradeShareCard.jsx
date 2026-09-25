@@ -403,26 +403,25 @@ const handleNativeShare = async () => {
                 </div>
               </div>
 
-              {/* Slanted asset logo watermarks in the right strip */}
-              {logoSrc && (
-                <div className="absolute right-0 top-0 bottom-0 w-[52px] overflow-hidden pointer-events-none z-0">
-                  {Array.from({ length: 35 }).map((_, i) => (
-                    <div key={`wm-row-${i}`} className="flex items-center justify-center gap-[1px]" style={{ transform: 'rotate(-20deg)', marginTop: '-1px' }}>
-                      <img
-                        src={logoSrc}
-                        alt=""
-                        className="brightness-0 invert"
-                        style={{
-                          width: '14px',
-                          height: '14px',
-                          objectFit: 'contain',
-                          opacity: 0.07,
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Vertical 15market signature in right strip */}
+              <div
+                className="absolute right-[14px] top-0 bottom-0 w-[24px] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
+                style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+              >
+                <span
+                  style={{
+                    fontFamily: '"Georgia", serif',
+                    fontStyle: 'italic',
+                    fontSize: '16px',
+                    letterSpacing: '0.15em',
+                    color: isWin ? 'rgba(23,163,100,0.12)' : 'rgba(239,83,80,0.12)',
+                    whiteSpace: 'nowrap',
+                    transform: 'rotate(180deg)',
+                  }}
+                >
+                  15market
+                </span>
+              </div>
 
               {/* QR Code */}
               <div
