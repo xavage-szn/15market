@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Check, Search, History, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { priceSocketService } from '../utils/priceSocket';
@@ -716,6 +716,9 @@ export default function MobileTradeView({
   const [stakeInput, setStakeInput] = useState('');
   const [sliderPct, setSliderPct] = useState(0);
   const [wheelActiveIdx, setWheelActiveIdx] = useState(null);
+  const wheelTouchStart = useRef(null);
+  const wheelSwipedRef = useRef(false);
+  const wheelScrollAt = useRef(0);
 
   // Global / settled trades for the live market scroller
   const [tickerHistory, setTickerHistory] = useState(() => {
@@ -911,6 +914,59 @@ useEffect(() => {
     return result;
   }, [tokens, effectiveActiveIdx]);
 
+  // ─── WHEEL NAVIGATION (swipe / drag / mouse wheel) ───
+  const shiftWheel = useCallback((dir) => {
+    if (!tokens.length) return;
+    setWheelActiveIdx((prev) => {
+      const total = tokens.length;
+      const current = prev !== null ? prev : activeAssetIdx;
+      const next = ((current + dir) % total + total) % total;
+      return next === activeAssetIdx ? null : next;
+    });
+  }, [tokens.length, activeAssetIdx]);
+
+  const onWheelTouchStart = useCallback((e) => {
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    wheelTouchStart.current = { y: touch.clientY, t: Date.now() };
+    wheelSwipedRef.current = false;
+  }, []);
+
+  const onWheelTouchMove = useCallback((e) => {
+    const start = wheelTouchStart.current;
+    if (!start) return;
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    // Claim the gesture so the page behind never scrolls with the wheel.
+    if (Math.abs(touch.clientY - start.y) > 6) {
+      wheelSwipedRef.current = true;
+      if (e.cancelable) e.preventDefault();
+    }
+  }, []);
+
+  const onWheelTouchEnd = useCallback((e) => {
+    const start = wheelTouchStart.current;
+    wheelTouchStart.current = null;
+    if (!start) return;
+    const touch = (e.changedTouches && e.changedTouches[0]) || null;
+    const endY = touch ? touch.clientY : start.y;
+    const deltaY = endY - start.y;
+    const elapsed = Date.now() - start.t;
+    // Quick flick counts even on a short travel; slow drags need more.
+    const threshold = elapsed < 250 ? 18 : 42;
+    if (Math.abs(deltaY) < threshold) return;
+    shiftWheel(deltaY < 0 ? 1 : -1);
+  }, [shiftWheel]);
+
+  const onWheelMouseWheel = useCallback((e) => {
+    if (!e.deltaY) return;
+    // Throttle so one trackpad flick advances a single row.
+    const now = Date.now();
+    if (now - wheelScrollAt.current < 180) return;
+    wheelScrollAt.current = now;
+    shiftWheel(e.deltaY > 0 ? 1 : -1);
+  }, [shiftWheel]);
+
   // Slider change handler
   const handleSliderChange = (e) => {
     const pct = parseFloat(e.target.value);
@@ -969,13 +1025,24 @@ useEffect(() => {
               WebkitBackdropFilter: 'blur(20px)',
               backdropFilter: 'blur(20px)',
             }}
-            onClick={() => setAssetOpen(false)}
+            onClick={() => {
+              if (wheelSwipedRef.current) {
+                wheelSwipedRef.current = false;
+                return;
+              }
+              setAssetOpen(false);
+            }}
           >
-            {/* Animated wheel */}
+            {/* Animated wheel — swipe, drag, or scroll to browse */}
             <div
               ref={assetWheelRef}
               className="relative w-full flex flex-col items-center justify-center"
-              style={{ height: '320px', overflow: 'hidden' }}
+              style={{ height: '320px', overflow: 'hidden', touchAction: 'pan-y' }}
+              onTouchStart={onWheelTouchStart}
+              onTouchMove={onWheelTouchMove}
+              onTouchEnd={onWheelTouchEnd}
+              onTouchCancel={onWheelTouchEnd}
+              onWheel={onWheelMouseWheel}
             >
               {visibleAssets.map((t, i) => {
                 const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
@@ -990,6 +1057,11 @@ useEffect(() => {
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isUnavailable) return;
+                        // A swipe that ends on a row must not register as a tap.
+                        if (wheelSwipedRef.current) {
+                          wheelSwipedRef.current = false;
+                          return;
+                        }
                         if (isCenter) {
                           handleMarketChange?.(t);
                           setAssetOpen(false);

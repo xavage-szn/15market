@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Download, Share2, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
+import { X, Share2, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
 
 const LOGO_MAP = {
   eth: '/ethusdc.png',
@@ -158,21 +158,6 @@ const captureCard = async () => {
       node.style.setProperty('filter', 'none', 'important');
     },
   });
-};
-
-const handleDownload = async () => {
-    if (saveState) return;
-    setSaveState('saving');
-    try {
-      const dataUrl = await captureCard();
-      if (!dataUrl) { setSaveState(null); return; }
-      const link = document.createElement('a');
-      link.download = `15market-${isWin ? 'win' : 'loss'}-${tradeId}.png`;
-      link.href = dataUrl;
-      link.click();
-      setSaveState('saved');
-      setTimeout(() => { setSaveState(null); onClose(); }, 1500);
-    } catch { setSaveState(null); }
 };
 
 const handleNativeShare = async () => {
@@ -545,7 +530,7 @@ const handleNativeShare = async () => {
               <button
                 onClick={handleNativeShare}
                 disabled={!!saveState}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full text-[12px] font-bold text-white transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-2 px-8 py-2.5 rounded-full text-[12px] font-bold text-white transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
                 style={{ backgroundColor: '#17A364', fontFamily: '"Comfortaa", cursive' }}
               >
                 {saveState === 'saving' ? (
@@ -554,19 +539,6 @@ const handleNativeShare = async () => {
                   <Share2 size={14} />
                 )}
                 Share
-              </button>
-              <button
-                onClick={handleDownload}
-                disabled={!!saveState}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/10 text-white text-[12px] font-bold hover:bg-white/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
-                style={{ fontFamily: '"Comfortaa", cursive' }}
-              >
-                {saveState === 'saving' ? (
-                  <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                ) : (
-                  <Download size={14} />
-                )}
-                Save Card
               </button>
             </div>
           </motion.div>
