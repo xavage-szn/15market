@@ -28,6 +28,64 @@ function getLogo(sym) {
   return LOGO_MAP[key] || null;
 }
 
+const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(reader.error || new Error('Unable to read image'));
+  reader.readAsDataURL(blob);
+});
+
+const waitForImage = (image) => {
+  if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Image load timed out'));
+    }, 10000);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      image.removeEventListener('load', handleLoad);
+      image.removeEventListener('error', handleError);
+    };
+    const handleLoad = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = () => {
+      cleanup();
+      reject(new Error('Image failed to load'));
+    };
+    image.addEventListener('load', handleLoad, { once: true });
+    image.addEventListener('error', handleError, { once: true });
+  });
+};
+
+const inlineImage = async (image) => {
+  const source = image.currentSrc || image.src;
+  if (!source || source.startsWith('data:')) return;
+
+  let dataUrl;
+  try {
+    const response = await fetch(source, { cache: 'no-store', mode: 'cors' });
+    if (!response.ok) throw new Error(`Image request failed: ${response.status}`);
+    dataUrl = await blobToDataUrl(await response.blob());
+  } catch (fetchError) {
+    if (!image.naturalWidth || !image.naturalHeight) throw fetchError;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    if (!context) throw fetchError;
+    context.drawImage(image, 0, 0);
+    dataUrl = canvas.toDataURL('image/png');
+  }
+
+  const probe = new Image();
+  probe.src = dataUrl;
+  await waitForImage(probe);
+  image.src = dataUrl;
+};
+
 export default function TradeShareCard({ isOpen, onClose, trade, userProfile, theme }) {
   const cardRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -83,53 +141,36 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
   }, [isOpen, trade, tradeId]);
 
 const captureCard = async () => {
-    const el = cardRef.current;
-    if (!el) return null;
+  const el = cardRef.current;
+  if (!el) return null;
 
-    const { toPng } = await import('html-to-image');
+  const { toPng } = await import('html-to-image');
+  const images = Array.from(el.querySelectorAll('img'));
+  await Promise.all(images.map(inlineImage));
 
-    const imgs = el.querySelectorAll('img');
-    const conversions = Array.from(imgs).map(img => {
-      if (img.src && !img.src.startsWith('data:')) {
-        return fetch(img.src)
-          .then(r => r.blob())
-          .then(blob => new Promise(resolve => {
-            const reader = new FileReader();
-            reader.onloadend = () => { img.src = reader.result; resolve(); };
-            reader.readAsDataURL(blob);
-          }))
-          .catch(() => {});
-      }
-      return Promise.resolve();
+  const s = el.style;
+  const saved = {
+    width: s.width, height: s.height, aspectRatio: s.aspectRatio,
+    borderRadius: s.borderRadius, transform: s.transform,
+  };
+  s.width = '520px';
+  s.height = '300px';
+  s.aspectRatio = 'auto';
+  s.borderRadius = '0';
+  s.transform = 'none';
+
+  try {
+    return await toPng(el, {
+      width: 520,
+      height: 300,
+      pixelRatio: 2,
+      backgroundColor: '#0a0a0a',
+      cacheBust: false,
+      filter: (node) => !node.classList?.contains('copy-id-btn'),
     });
-    await Promise.all(conversions);
-    await new Promise(r => setTimeout(r, 100));
-
-    const s = el.style;
-    const saved = {
-      width: s.width, height: s.height, aspectRatio: s.aspectRatio,
-      borderRadius: s.borderRadius, transform: s.transform,
-    };
-    s.width = '520px';
-    s.height = '300px';
-    s.aspectRatio = 'auto';
-    s.borderRadius = '0';
-    s.transform = 'none';
-
-    await new Promise(r => setTimeout(r, 100));
-
-    try {
-        return await toPng(el, {
-            width: 520,
-            height: 300,
-            pixelRatio: 2,
-            backgroundColor: '#0a0a0a',
-            cacheBust: true,
-            filter: (node) => !node.classList?.contains('copy-id-btn'),
-        });
-    } finally {
-        Object.assign(s, saved);
-    }
+  } finally {
+    Object.assign(s, saved);
+  }
 };
 
 const handleDownload = async () => {
@@ -312,7 +353,7 @@ const handleNativeShare = async () => {
               {/* Top Row */}
               <div className="relative z-10 flex items-center justify-between px-4 pt-5">
                 <div className="w-0 h-0">
-                  <img src="/gowlogo.png" alt="15market" crossOrigin="anonymous" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none' }} />
+                  <img src="/gowlogo.png" alt="15market" crossOrigin="anonymous" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none', transform: 'translateY(-20%) scale(1.5)', transformOrigin: 'top left' }} />
                 </div>
               </div>
 
@@ -322,7 +363,7 @@ const handleNativeShare = async () => {
                 <div className="flex-1 min-w-0 flex flex-col justify-between">
                   {/* Asset logo + ticker */}
                   <div className="flex items-center gap-3 mb-1 ml-[-23%]">
-                    <div className={`flex items-center justify-center mt-[1%] ${sym === 'SOL' ? 'ml-[3%]' : 'ml-0'}`}>
+                    <div className={`flex items-center justify-center mt-[1%] ${sym === 'SOL' ? 'ml-[3%]' : 'ml-[20%]'}`}>
                       {logoSrc ? (
                         <img src={logoSrc} alt={sym} crossOrigin="anonymous" className={`${sym === 'SOL' ? 'h-[131.22px]' : 'h-[109.35px]'} w-auto object-contain brightness-0 invert`} />
                       ) : (
@@ -416,7 +457,7 @@ const handleNativeShare = async () => {
               >
                 <span
                   style={{
-                    fontFamily: '"Halimun", cursive',
+                    fontFamily: '"Autography", cursive',
                     fontSize: '22px',
                     color: isWin ? '#17A364' : '#EF5350',
                     opacity: 0.3,
