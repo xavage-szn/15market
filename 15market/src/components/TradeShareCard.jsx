@@ -380,45 +380,53 @@ const handleNativeShare = async () => {
 
               {/* Vertical Banner with zigzag edges */}
               <div
-                className="absolute right-[52px] top-0 bottom-0 w-[90px] overflow-hidden flex flex-col items-center"
-                style={{
-                  background: isWin
-                    ? 'linear-gradient(180deg, #17A364 0%, #0d6b42 100%)'
-                    : 'linear-gradient(180deg, #EF5350 0%, #c62828 100%)',
-                  boxShadow: '-10px 0 30px rgba(0,0,0,0.7), 10px 0 30px rgba(0,0,0,0.7), 0 0 25px rgba(0,0,0,0.5)',
-                  fontFamily: '"Comfortaa", cursive',
-                  clipPath: (() => {
-                    const w = 90, h = 300, teeth = 20, depth = 6;
-                    const step = h / teeth;
-                    const pts = [];
-                    // Left edge zigzag (top to bottom)
-                    for (let i = 0; i <= teeth; i++) {
-                      const y = i * step;
-                      const x = i % 2 === 0 ? depth : 0;
-                      pts.push(`${x} ${y}`);
-                    }
-                    // Right edge zigzag (bottom to top)
-                    for (let i = teeth; i >= 0; i--) {
-                      const y = i * step;
-                      const x = i % 2 === 0 ? w - depth : w;
-                      pts.push(`${x} ${y}`);
-                    }
-                    return `polygon(${pts.join(', ')})`;
-                  })(),
-                }}
+                className="absolute right-[52px] top-0 bottom-0 w-[90px] flex flex-col items-center"
+                style={{ fontFamily: '"Comfortaa", cursive' }}
               >
-                <div className="absolute inset-0 opacity-[0.15] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
-                <div className="pt-3 -mt-[6.2%] text-center z-10 select-none">
-                  <span
-                    className="text-white font-black text-[13px] tracking-[0.22em] uppercase drop-shadow-sm"
-                    style={{
-                      fontFamily: '"Comfortaa", cursive',
-                      filter: isWin ? 'drop-shadow(0 0 10px rgba(23,163,100,0.8))' : 'drop-shadow(0 0 10px rgba(239,83,80,0.8))'
-                    }}
-                  >
-                    {isWin ? 'WON' : 'LOST'}
-                  </span>
+                {/* Left zigzag edge */}
+                <svg className="absolute left-0 top-0 h-full w-[10px]" viewBox="0 0 10 300" preserveAspectRatio="none" style={{ transform: 'translateX(-10px)' }}>
+                  {Array.from({ length: 25 }).map((_, i) => (
+                    <polygon
+                      key={`zl-${i}`}
+                      points={`10,${i * 12} 0,${i * 12 + 6} 10,${i * 12 + 12}`}
+                      fill={isWin ? '#17A364' : '#EF5350'}
+                    />
+                  ))}
+                </svg>
+                {/* Right zigzag edge */}
+                <svg className="absolute right-0 top-0 h-full w-[10px]" viewBox="0 0 10 300" preserveAspectRatio="none" style={{ transform: 'translateX(10px)' }}>
+                  {Array.from({ length: 25 }).map((_, i) => (
+                    <polygon
+                      key={`zr-${i}`}
+                      points={`0,${i * 12} 10,${i * 12 + 6} 0,${i * 12 + 12}`}
+                      fill={isWin ? '#17A364' : '#EF5350'}
+                    />
+                  ))}
+                </svg>
+                {/* Banner body */}
+                <div
+                  className="w-full h-full overflow-hidden flex flex-col items-center"
+                  style={{
+                    background: isWin
+                      ? 'linear-gradient(180deg, #17A364 0%, #0d6b42 100%)'
+                      : 'linear-gradient(180deg, #EF5350 0%, #c62828 100%)',
+                    boxShadow: '-10px 0 30px rgba(0,0,0,0.7), 10px 0 30px rgba(0,0,0,0.7), 0 0 25px rgba(0,0,0,0.5)',
+                  }}
+                >
+                  <div className="absolute inset-0 opacity-[0.15] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+                  <div className="pt-3 -mt-[6.2%] text-center z-10 select-none">
+                    <span
+                      className="text-white font-black text-[13px] tracking-[0.22em] uppercase drop-shadow-sm"
+                      style={{
+                        fontFamily: '"Comfortaa", cursive',
+                        filter: isWin ? 'drop-shadow(0 0 10px rgba(23,163,100,0.8))' : 'drop-shadow(0 0 10px rgba(239,83,80,0.8))'
+                      }}
+                    >
+                      {isWin ? 'WON' : 'LOST'}
+                    </span>
+                  </div>
                 </div>
+              </div>
               </div>
 
               {/* Vertical 15market signature in right strip */}
