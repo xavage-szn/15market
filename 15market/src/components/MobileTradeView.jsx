@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 import { ChevronDown, ChevronUp, Check, Search, History, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { priceSocketService } from '../utils/priceSocket';
 import { KEEPER_URL_ARC } from '../constants';
@@ -14,9 +14,80 @@ const LOGO_MAP = {
   avax: '/avax.png',
 };
 
+const WHEEL_ROW_H = 58;
+const WHEEL_VISIBLE = 5;
+
 function getLogoFilter(isLight) {
   if (isLight) return 'brightness(0)';
   return 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)';
+}
+
+/**
+ * WheelRow — one row of the continuous asset wheel. Every visual property is
+ * derived from a motion value, so the row scales and fades continuously with
+ * the drag instead of snapping between discrete states.
+ */
+function WheelRow({ token, index, isLight, isUnavailable, logo, wheelPos, onTap }) {
+  const distance = useTransform(wheelPos, (v) => Math.abs(v - index));
+  const scale = useTransform(distance, [0, 1, 2, 3], [1, 0.82, 0.68, 0.58]);
+  const opacity = useTransform(distance, [0, 1, 2, 3], [1, 0.72, 0.4, 0.16]);
+  const fontSize = useTransform(distance, [0, 1, 2, 3], [28, 19, 13, 11]);
+  const logoSize = useTransform(distance, [0, 1, 2, 3], [40, 28, 20, 17]);
+  const blur = useTransform(distance, [0, 1, 2, 3], [0, 0, 0.4, 0.9]);
+  const rowFilter = useTransform(blur, (b) => (b > 0.01 ? `blur(${b}px)` : 'blur(0px)'));
+
+  return (
+    <motion.button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onTap(); }}
+      className="w-full flex items-center justify-center gap-2 px-6 bg-transparent border-none outline-none"
+      style={{
+        height: `${WHEEL_ROW_H}px`,
+        scale,
+        opacity,
+        filter: rowFilter,
+        pointerEvents: isUnavailable ? 'none' : 'auto',
+        cursor: isUnavailable ? 'default' : 'pointer',
+        touchAction: 'none',
+      }}
+    >
+      {logo ? (
+        <motion.img
+          src={logo}
+          alt={token.symbol}
+          className="object-contain shrink-0"
+          style={{
+            width: logoSize,
+            height: logoSize,
+            filter: getLogoFilter(isLight),
+            opacity: isUnavailable ? 0.3 : 1,
+          }}
+          crossOrigin="anonymous"
+        />
+      ) : (
+        <motion.span
+          className="font-black shrink-0"
+          style={{
+            fontSize: logoSize,
+            width: logoSize,
+            color: isLight ? '#0a261a' : '#fff',
+            opacity: isUnavailable ? 0.3 : 1,
+          }}
+        >{token.symbol[0]}</motion.span>
+      )}
+      <motion.span
+        className="font-black tracking-wider"
+        style={{
+          fontSize,
+          color: isLight ? '#0a261a' : '#fff',
+          opacity: isUnavailable ? 0.3 : 1,
+          fontFamily: '"Comfortaa", cursive',
+        }}
+      >
+        {token.symbol}
+      </motion.span>
+    </motion.button>
+  );
 }
 
 /**
@@ -717,8 +788,15 @@ export default function MobileTradeView({
   const [sliderPct, setSliderPct] = useState(0);
   const [wheelActiveIdx, setWheelActiveIdx] = useState(null);
   const wheelTouchStart = useRef(null);
-  const wheelSwipedRef = useRef(false);
+  // Timestamp of the last real drag, so the click that follows a swipe is
+  // swallowed instead of selecting a row or dismissing the sheet.
+  const wheelSwipedAt = useRef(0);
   const wheelScrollAt = useRef(0);
+
+  // Continuous wheel position in row units (fractional while dragging).
+  // Dragged 1:1 with the finger, then spring-animated into place on release.
+  const wheelPos = useMotionValue(0);
+  const wheelSettle = useRef(null);
 
   // Global / settled trades for the live market scroller
   const [tickerHistory, setTickerHistory] = useState(() => {
@@ -901,71 +979,133 @@ useEffect(() => {
     return idx >= 0 ? idx : 0;
   }, [tokens, activeMarket]);
 
-  const effectiveActiveIdx = wheelActiveIdx !== null ? wheelActiveIdx : activeAssetIdx;
+  // A shorter token list (search filter) can strand the stored index out of
+  // range, so clamp on read rather than storing a stale value.
+  const maxWheelIdx = Math.max(0, tokens.length - 1);
+  const selectedWheelIdx = wheelActiveIdx !== null
+    ? Math.min(wheelActiveIdx, maxWheelIdx)
+    : null;
+  const effectiveActiveIdx = selectedWheelIdx !== null ? selectedWheelIdx : activeAssetIdx;
 
-  const visibleAssets = useMemo(() => {
-    if (!tokens.length) return [];
+  // Keep the motion value in sync when the wheel is not being dragged.
+  useEffect(() => {
+    if (wheelTouchStart.current) return;
+    const next = Math.max(0, Math.min(maxWheelIdx, effectiveActiveIdx));
+    if (wheelPos.get() !== next) wheelPos.set(next);
+  }, [effectiveActiveIdx, maxWheelIdx, wheelPos]);
+
+  // ─── WHEEL NAVIGATION (continuous drag + momentum snap) ───
+  const settleWheelTo = useCallback((target, velocity = 0) => {
     const total = tokens.length;
-    const result = [];
-    for (let offset = -2; offset <= 2; offset++) {
-      const idx = ((effectiveActiveIdx + offset) % total + total) % total;
-      result.push({ ...tokens[idx], dist: Math.abs(offset), offset });
-    }
-    return result;
-  }, [tokens, effectiveActiveIdx]);
-
-  // ─── WHEEL NAVIGATION (swipe / drag / mouse wheel) ───
-  const shiftWheel = useCallback((dir) => {
-    if (!tokens.length) return;
-    setWheelActiveIdx((prev) => {
-      const total = tokens.length;
-      const current = prev !== null ? prev : activeAssetIdx;
-      const next = ((current + dir) % total + total) % total;
-      return next === activeAssetIdx ? null : next;
+    if (!total) return;
+    const clamped = Math.max(0, Math.min(total - 1, target));
+    if (wheelSettle.current) wheelSettle.current.stop();
+    // Spring to the row, carrying the flick velocity so fast swipes coast
+    // naturally instead of stopping dead.
+    wheelSettle.current = animate(wheelPos, clamped, {
+      type: 'spring',
+      stiffness: 260,
+      damping: 30,
+      mass: 0.9,
+      velocity,
+      restDelta: 0.0005,
     });
-  }, [tokens.length, activeAssetIdx]);
+    setWheelActiveIdx(clamped === activeAssetIdx ? null : clamped);
+  }, [tokens.length, activeAssetIdx, wheelPos]);
+
+  const shiftWheel = useCallback((dir) => {
+    const total = tokens.length;
+    if (!total) return;
+    const current = wheelPos.get();
+    settleWheelTo(Math.round(current) + dir, 0);
+  }, [tokens.length, settleWheelTo, wheelPos]);
 
   const onWheelTouchStart = useCallback((e) => {
     const touch = e.touches && e.touches[0];
     if (!touch) return;
-    wheelTouchStart.current = { y: touch.clientY, t: Date.now() };
-    wheelSwipedRef.current = false;
-  }, []);
+    if (wheelSettle.current) wheelSettle.current.stop();
+    wheelTouchStart.current = {
+      y: touch.clientY,
+      startPos: wheelPos.get(),
+      lastY: touch.clientY,
+      lastT: Date.now(),
+      velocity: 0,
+    };
+  }, [wheelPos]);
 
   const onWheelTouchMove = useCallback((e) => {
     const start = wheelTouchStart.current;
     if (!start) return;
     const touch = e.touches && e.touches[0];
     if (!touch) return;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaY) > 4) wheelSwipedAt.current = Date.now();
     // Claim the gesture so the page behind never scrolls with the wheel.
-    if (Math.abs(touch.clientY - start.y) > 6) {
-      wheelSwipedRef.current = true;
-      if (e.cancelable) e.preventDefault();
-    }
-  }, []);
+    if (e.cancelable) e.preventDefault();
 
-  const onWheelTouchEnd = useCallback((e) => {
+    // Rubber-band resistance past the first and last row.
+    const raw = start.startPos - deltaY / WHEEL_ROW_H;
+    const max = Math.max(0, tokens.length - 1);
+    let next = raw;
+    if (raw < 0) next = raw * 0.35;
+    else if (raw > max) next = max + (raw - max) * 0.35;
+    wheelPos.set(next);
+
+    // Track velocity in rows/second for momentum on release.
+    const now = Date.now();
+    const dt = now - start.lastT;
+    if (dt > 0) {
+      const instant = -((touch.clientY - start.lastY) / WHEEL_ROW_H) / (dt / 1000);
+      start.velocity = start.velocity * 0.7 + instant * 0.3;
+      start.lastY = touch.clientY;
+      start.lastT = now;
+    }
+  }, [tokens.length, wheelPos]);
+
+  const onWheelTouchEnd = useCallback(() => {
     const start = wheelTouchStart.current;
     wheelTouchStart.current = null;
     if (!start) return;
-    const touch = (e.changedTouches && e.changedTouches[0]) || null;
-    const endY = touch ? touch.clientY : start.y;
-    const deltaY = endY - start.y;
-    const elapsed = Date.now() - start.t;
-    // Quick flick counts even on a short travel; slow drags need more.
-    const threshold = elapsed < 250 ? 18 : 42;
-    if (Math.abs(deltaY) < threshold) return;
-    shiftWheel(deltaY < 0 ? 1 : -1);
-  }, [shiftWheel]);
+    const total = tokens.length;
+    if (!total) return;
+
+    // Project the flick forward so a fast swipe travels several rows.
+    const projected = wheelPos.get() + start.velocity * 0.12;
+    let target = Math.round(projected);
+    // A short flick with no real velocity still counts as one row.
+    if (Math.abs(target - Math.round(start.startPos)) === 0 && start.velocity !== 0) {
+      target = Math.round(start.startPos) + (start.velocity > 0 ? 1 : -1);
+    }
+    settleWheelTo(target, start.velocity);
+  }, [tokens.length, settleWheelTo, wheelPos]);
 
   const onWheelMouseWheel = useCallback((e) => {
     if (!e.deltaY) return;
     // Throttle so one trackpad flick advances a single row.
     const now = Date.now();
-    if (now - wheelScrollAt.current < 180) return;
+    if (now - wheelScrollAt.current < 120) return;
     wheelScrollAt.current = now;
     shiftWheel(e.deltaY > 0 ? 1 : -1);
   }, [shiftWheel]);
+
+  // Tapping a row scrolls the wheel to it instead of teleporting.
+  const scrollWheelTo = useCallback((idx) => {
+    // Ignore the click that browsers synthesise at the end of a drag.
+    if (Date.now() - wheelSwipedAt.current < 350) return;
+    settleWheelTo(idx, 0);
+  }, [settleWheelTo]);
+
+  const onWheelBackdropClick = useCallback(() => {
+    if (Date.now() - wheelSwipedAt.current < 350) return;
+    setAssetOpen(false);
+  }, []);
+
+  // Vertical offset of the whole list. Position 0 sits the first row in the
+  // middle slot, so a fractional value gives a true continuous scroll.
+  const wheelY = useTransform(
+    wheelPos,
+    (v) => (WHEEL_VISIBLE / 2 - 0.5) * WHEEL_ROW_H - v * WHEEL_ROW_H
+  );
 
   // Slider change handler
   const handleSliderChange = (e) => {
@@ -1025,94 +1165,92 @@ useEffect(() => {
               WebkitBackdropFilter: 'blur(20px)',
               backdropFilter: 'blur(20px)',
             }}
-            onClick={() => {
-              if (wheelSwipedRef.current) {
-                wheelSwipedRef.current = false;
-                return;
-              }
-              setAssetOpen(false);
-            }}
+            onClick={onWheelBackdropClick}
           >
-            {/* Animated wheel — swipe, drag, or scroll to browse */}
+            {/* Continuous wheel — drag, flick, scroll, or tap a row */}
             <div
               ref={assetWheelRef}
-              className="relative w-full flex flex-col items-center justify-center"
-              style={{ height: '320px', overflow: 'hidden', touchAction: 'pan-y' }}
+              className="relative w-full select-none"
+              style={{
+                height: `${WHEEL_ROW_H * WHEEL_VISIBLE}px`,
+                overflow: 'hidden',
+                touchAction: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+              }}
               onTouchStart={onWheelTouchStart}
               onTouchMove={onWheelTouchMove}
               onTouchEnd={onWheelTouchEnd}
               onTouchCancel={onWheelTouchEnd}
               onWheel={onWheelMouseWheel}
             >
-              {visibleAssets.map((t, i) => {
-                const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
-                const logo = LOGO_MAP[t.id.toLowerCase()];
-                const isCenter = t.dist === 0;
-                const isNear = t.dist === 1;
+              {/* Soft fade at the top and bottom edges */}
+              <div
+                className="absolute inset-x-0 top-0 z-20 pointer-events-none"
+                style={{
+                  height: `${WHEEL_ROW_H}px`,
+                  background: `linear-gradient(to bottom, ${isLight ? 'rgba(255,255,255,0.98)' : 'rgba(6,9,7,0.98)'}, transparent)`,
+                }}
+              />
+              <div
+                className="absolute inset-x-0 bottom-0 z-20 pointer-events-none"
+                style={{
+                  height: `${WHEEL_ROW_H}px`,
+                  background: `linear-gradient(to top, ${isLight ? 'rgba(255,255,255,0.98)' : 'rgba(6,9,7,0.98)'}, transparent)`,
+                }}
+              />
 
-                return (
-                  <div key={i} className="w-full flex flex-col items-center">
-                    <button
-                      disabled={isUnavailable}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isUnavailable) return;
-                        // A swipe that ends on a row must not register as a tap.
-                        if (wheelSwipedRef.current) {
-                          wheelSwipedRef.current = false;
-                          return;
-                        }
-                        if (isCenter) {
-                          handleMarketChange?.(t);
-                          setAssetOpen(false);
-                          setWheelActiveIdx(null);
-                        } else {
-                          setWheelActiveIdx(((effectiveActiveIdx + t.offset) % tokens.length + tokens.length) % tokens.length);
-                        }
-                      }}
-                      className={`w-full flex items-center justify-center gap-2 px-6 ${
-                        isUnavailable ? 'opacity-30' : 'active:scale-95'
-                      }`}
-                      style={{ height: '58px' }}
-                    >
-                      {logo ? (
-                        <img src={logo} alt={t.symbol} className="object-contain shrink-0" style={{
-                          width: isCenter ? '40px' : isNear ? '28px' : '20px',
-                          height: isCenter ? '40px' : isNear ? '28px' : '20px',
-                          filter: getLogoFilter(isLight),
-                          opacity: isCenter ? 1 : isNear ? 0.7 : 0.4,
-                          transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                        }} crossOrigin="anonymous" />
-                      ) : (
-                        <span className="font-black" style={{
-                          fontSize: isCenter ? '24px' : isNear ? '16px' : '10px',
-                          color: isLight ? '#0a261a' : '#fff',
-                          opacity: isCenter ? 1 : isNear ? 0.7 : 0.4,
-                          transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                        }}>{t.symbol[0]}</span>
-                      )}
-                      <span className="font-black tracking-wider" style={{
-                        fontSize: isCenter ? '28px' : isNear ? '18px' : '12px',
-                        color: isLight ? '#0a261a' : '#fff',
-                        opacity: isCenter ? 1 : isNear ? 0.7 : 0.4,
-                        fontFamily: '"Comfortaa", cursive',
-                        transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                      }}>
-                        {t.symbol}
-                      </span>
-                    </button>
-                    {i < 4 && (
-                      <div className="w-4/5 mx-auto" style={{
-                        height: '1px',
-                        backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
-                        opacity: isCenter ? 0.9 : 0.4,
-                        transition: 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                      }} />
-                    )}
-                  </div>
-                );
-              })}
+              <motion.div
+                className="absolute inset-x-0 top-0"
+                style={{ y: wheelY }}
+              >
+                {tokens.map((t, i) => {
+                  const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
+                  const logo = LOGO_MAP[t.id.toLowerCase()];
+                  return (
+                    <WheelRow
+                      key={t.id || i}
+                      token={t}
+                      index={i}
+                      isLight={isLight}
+                      isUnavailable={isUnavailable}
+                      logo={logo}
+                      wheelPos={wheelPos}
+                      onTap={() => scrollWheelTo(i)}
+                    />
+                  );
+                })}
+              </motion.div>
+
+              {/* Center highlight band */}
+              <div
+                className="absolute inset-x-4 z-10 pointer-events-none rounded-2xl"
+                style={{
+                  top: `${((WHEEL_VISIBLE - 1) / 2) * WHEEL_ROW_H}px`,
+                  height: `${WHEEL_ROW_H}px`,
+                  border: `1px solid ${isLight ? 'rgba(10,38,26,0.08)' : 'rgba(255,255,255,0.07)'}`,
+                  background: isLight ? 'rgba(23,163,100,0.05)' : 'rgba(23,163,100,0.08)',
+                }}
+              />
             </div>
+
+            {/* Confirm the row sitting in the center slot */}
+            <motion.button
+              type="button"
+              onClick={() => {
+                const token = tokens[effectiveActiveIdx];
+                if (!token) return;
+                const id = token.id?.toLowerCase();
+                if (id === 'mon' || id === 'avax') return;
+                pickAsset(token);
+                setWheelActiveIdx(null);
+              }}
+              whileTap={{ scale: 0.94 }}
+              className="mt-6 px-10 py-2.5 rounded-full text-[13px] font-bold text-white"
+              style={{ backgroundColor: '#17A364', fontFamily: '"Comfortaa", cursive' }}
+            >
+              Select {tokens[effectiveActiveIdx]?.symbol || ''}
+            </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1125,7 +1263,10 @@ useEffect(() => {
         {/* Selected Asset Ticker on Top Left of Chart Widget */}
         <button
           onClick={() => setAssetOpen(o => {
-            if (!o) setWheelActiveIdx(null);
+            if (!o) {
+              setWheelActiveIdx(null);
+              wheelPos.set(activeAssetIdx);
+            }
             return !o;
           })}
           className="absolute top-3.5 left-5 z-30 flex items-center gap-2 bg-transparent border-none p-1 outline-none cursor-pointer active:scale-95 transition-transform"
