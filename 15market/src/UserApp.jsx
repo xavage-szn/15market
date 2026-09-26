@@ -216,6 +216,24 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
 };
 
 
+// Onboarding is for first-time visitors only. A profile that already existed,
+// or any local record of a previous session, means the user is returning and
+// must go straight into the app. A missing or failed profile lookup is treated
+// as returning too, so a network hiccup can never re-trigger onboarding.
+function needsOnboarding(profile, addr) {
+  const key = (addr || '').toLowerCase();
+  if (!key) return true;
+  try {
+    if (localStorage.getItem(`15market_onboarded_${key}`) === 'true') return false;
+    if (localStorage.getItem(`15market_profile_exists_${key}`) === 'true') return false;
+  } catch { /* storage unavailable */ }
+  if (!profile || profile.error) return false;
+  if (profile.onboarded === true || profile.onboardedAt || profile.username) return false;
+  const createdAt = Number(profile.createdAt || 0);
+  if (!createdAt) return false;
+  return Date.now() - createdAt < 60 * 60 * 1000;
+}
+
 const DissolveTransition = ({ isAnimating, targetTheme }) => {
   if (!isAnimating) return null;
 
@@ -605,20 +623,17 @@ const performStealthChecks = useCallback(async (addr) => {
             ]);
 
             // Process profile result
-            const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
             if (profileRes && profileRes.ok) {
-                const pData = await profileRes.json();
-                setUserProfile(pData);
-                const profileOnboarded = pData.onboarded === true || !!pData.onboardedAt || !!pData.username;
-                setShowOnboarding(!profileOnboarded);
-                if (profileOnboarded) {
-                    localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
-                    localStorage.setItem(`15market_profile_exists_${addr.toLowerCase()}`, 'true');
-                }
-            } else if (!profileRes && localOnboarded) {
-                setShowOnboarding(false);
+              const pData = await profileRes.json();
+              setUserProfile(pData);
+              const mustOnboard = needsOnboarding(pData, addr);
+              setShowOnboarding(mustOnboard);
+              if (!mustOnboard) {
+                localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+                localStorage.setItem(`15market_profile_exists_${addr.toLowerCase()}`, 'true');
+              }
             } else {
-                setShowOnboarding(true);
+              setShowOnboarding(false);
             }
 
             // Process session result
@@ -761,12 +776,6 @@ const performStealthChecks = useCallback(async (addr) => {
   }, [theme, network]);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
-
-  useEffect(() => {
-    if (userProfile?.isInitial && !showOnboarding) {
-      setShowOnboarding(true);
-    }
-  }, [userProfile, showOnboarding]);
 
   // Auto-switch to Arc Testnet if wallet is on the wrong network (unless bridging)
   useEffect(() => {
@@ -1141,9 +1150,9 @@ const performStealthChecks = useCallback(async (addr) => {
         const data = await res.json();
         if (data && !data.error) {
           setUserProfile(data);
-          const profileOnboarded = data.onboarded === true || !!data.onboardedAt || !!data.username;
-          setShowOnboarding(!profileOnboarded);
-          if (profileOnboarded) {
+          const mustOnboard = needsOnboarding(data, address);
+          setShowOnboarding(mustOnboard);
+          if (!mustOnboard) {
             localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
             localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, "true");
           }
@@ -1156,9 +1165,12 @@ const performStealthChecks = useCallback(async (addr) => {
           }
         }
       } else if (res.status === 404) {
-        setShowOnboarding(true);
-        localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
-        localStorage.removeItem(`15market_onboarded_${address.toLowerCase()}`);
+        // No profile row: only a genuinely new address gets onboarding. The
+        // local markers are never cleared here, otherwise a transient 404 would
+        // erase the evidence that this address has been here before.
+        const returning = localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`) === "true"
+          || localStorage.getItem(`15market_onboarded_${address.toLowerCase()}`) === "true";
+        setShowOnboarding(!returning);
       }
     } catch (e) {
       console.error("Profile fetch error:", e);
