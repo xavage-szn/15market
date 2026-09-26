@@ -176,6 +176,62 @@ classicEngine.start();
 emitAdminStats(); // Initial broadcast
 setInterval(emitAdminStats, 10000); // Periodic 10s sync
 
+/**
+ * Put trades that were open when the process died back into cache.trades.
+ *
+ * cache.trades only lives in memory, so without this a restart silently strands
+ * every in-flight trade: the 50ms monitor never sees it, the 3s recovery sweep
+ * never sees it, and the client keeps polling a PENDING row that nothing will
+ * ever resolve. Trades are persisted to the trades table the moment they are
+ * placed, so they can be reloaded and settled normally.
+ */
+async function recoverUnsettledTrades() {
+  let rows = [];
+  try {
+    rows = await profiles.getUnsettledTradesAsync();
+  } catch (e) {
+    console.warn('[Recovery] Unsettled trade scan failed:', e.message);
+    return;
+  }
+  if (!rows.length) return;
+
+  let restored = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    const id = String(row.id || row.betId || '');
+    if (!id || cache.trades.has(id)) continue;
+    // The trades table also carries ledger rows (deposits and the like). They
+    // have no symbol or entry price, so feeding one to the settlement engine
+    // would price it against nothing and corrupt the balance. Only real bets
+    // are eligible for recovery.
+    if (!row.symbol || row.entryPrice == null || String(id).startsWith('DEPOSIT-')) { skipped++; continue; }
+    const trade = {
+      ...row,
+      id,
+      betId: id,
+      userAddr: String(row.userAddr || '').toLowerCase(),
+      status: 'PENDING',
+      createdAt: Number(row.createdAt || row.timestamp || Date.now()),
+      settleAt: Number(row.settleAt || 0)
+        || Number(row.timestamp || row.createdAt || Date.now()) + (Number(row.duration || 15) * 1000),
+      settleRetries: 0,
+    };
+    if (!trade.userAddr) { skipped++; continue; }
+    cache.trades.set(id, trade);
+    restored++;
+  }
+  if (restored > 0) {
+    console.log(`[Recovery] Restored ${restored} unsettled trade(s) into the settlement engine.`);
+    emitAdminStats();
+  }
+  if (skipped > 0) {
+    console.log(`[Recovery] Ignored ${skipped} non-trade row(s) (deposits/ledger entries).`);
+  }
+}
+
+recoverUnsettledTrades();
+setInterval(recoverUnsettledTrades, 60000); // Safety net for late writes
+
 // Initialize Odds Engine
 const oddsEngine = new OddsEngine(io, redis);
 oddsEngine.start();

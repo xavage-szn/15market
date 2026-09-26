@@ -263,9 +263,17 @@ class ProfileService {
         this.sbInitPromise = (async () => {
             await this.probeSupabaseColumns();
             await this.probeSupabaseTradeTable();
+            if (this.sbTradeTableAvailable === null) {
+                // Transient probe failure. Drop the memo so the next caller
+                // retries instead of running degraded for the whole process.
+                this.sbInitPromise = null;
+            }
             await this.loadFromSupabase();
             await this.migrateLocalToSupabase();
-        })().catch(e => console.warn('[Supabase] Init failed:', e.message));
+        })().catch(e => {
+            this.sbInitPromise = null;
+            console.warn('[Supabase] Init failed, will retry:', e.message);
+        });
         return this.sbInitPromise;
     }
 
@@ -285,14 +293,18 @@ class ProfileService {
     async probeSupabaseTradeTable() {
         if (!SUPABASE_ENABLED || this.sbTradeTableAvailable !== null) return;
         try {
-            const res = await supabaseRequest('/rest/v1/trades?select=id&limit=1');
+            const res = await supabaseRequest('/rest/v1/trades?select=id&limit=1', { timeout: 20000 });
             this.sbTradeTableAvailable = res.ok;
             if (!res.ok) {
                 console.warn('[Supabase] Trades table unavailable — history will use the local fallback until the migration is applied.');
             }
         } catch (e) {
-            this.sbTradeTableAvailable = false;
-            console.warn('[Supabase] Trades table probe failed:', e.message);
+            // A timeout or network blip must not latch the table off for the life
+            // of the process: every trade placed afterwards would silently fail
+            // to persist, so a crash would lose it. Leave the flag null so the
+            // next call probes again once Supabase is reachable.
+            this.sbTradeTableAvailable = null;
+            console.warn('[Supabase] Trades table probe failed, will retry:', e.message);
         }
     }
 
@@ -483,6 +495,32 @@ class ProfileService {
         } catch (e) {
             console.warn(`[Supabase] History read failed for ${addr}:`, e.message);
             return this.getHistory(addr);
+        }
+    }
+
+    /**
+     * Every trade still awaiting a verdict, across all users.
+     *
+     * cache.trades is in-memory, so a restart orphans any trade that was open
+     * at the time: the monitor never sees it and the client polls a PENDING row
+     * that nothing will ever settle. Trades are written here the moment they
+     * are placed, so this is the record used to put those orphans back.
+     */
+    async getUnsettledTradesAsync() {
+        if (!SUPABASE_ENABLED) return [];
+        await this.initSupabase();
+        if (!this.sbTradeTableAvailable) return [];
+        try {
+            const res = await supabaseRequest(
+                '/rest/v1/trades?select=*&status=in.(PENDING,RESOLVING)&order=timestamp.asc&limit=500',
+                { timeout: 20000 }
+            );
+            if (!res.ok) return [];
+            const rows = await res.json();
+            return (rows || []).map(supabaseTradeToRecord);
+        } catch (e) {
+            console.warn('[Supabase] Unsettled trade recovery failed:', e.message);
+            return [];
         }
     }
 
