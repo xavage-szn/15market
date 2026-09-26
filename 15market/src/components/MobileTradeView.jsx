@@ -15,11 +15,10 @@ const LOGO_MAP = {
 };
 
 const WHEEL_ROW_H = 58;
-const WHEEL_BOX_H = 320;
-// Rows rendered either side of the center. The box only ever shows 5 of them;
-// the extra pair is off-screen during a drag and slides in as the wheel turns,
-// which is what lets the list scroll forever without a visible seam.
-const WHEEL_SPAN = 3;
+// Most rows the wheel will show at once. The window is sized from the token
+// count at runtime so the whole list fits on a phone without repeating an
+// asset on screen.
+const WHEEL_MAX_ROWS = 6;
 
 // Modulo that always returns a valid index for arrays shorter than `n`.
 const wrapIdx = (n, total) => ((n % total) + total) % total;
@@ -43,7 +42,7 @@ function getLogoFilter(isLight) {
  * derived from a motion value, so the row scales and fades continuously with
  * the drag instead of snapping between discrete states.
  */
-function WheelRow({ token, index, isLight, isUnavailable, logo, wheelPos, onTap }) {
+function WheelRow({ token, index, isLight, isUnavailable, logo, wheelPos, boxH, onTap }) {
   const distance = useTransform(wheelPos, (v) => Math.abs(v - index));
   const scale = useTransform(distance, [0, 1, 2, 3], [1, 0.82, 0.68, 0.58]);
   const opacity = useTransform(distance, [0, 1, 2, 3], [1, 0.72, 0.4, 0.16]);
@@ -55,7 +54,7 @@ function WheelRow({ token, index, isLight, isUnavailable, logo, wheelPos, onTap 
   // one row the offset resolves unchanged and no DOM node ever jumps.
   const y = useTransform(
     wheelPos,
-    (v) => (WHEEL_BOX_H / 2 - WHEEL_ROW_H / 2) - (index - v) * WHEEL_ROW_H
+    (v) => (boxH / 2 - WHEEL_ROW_H / 2) - (index - v) * WHEEL_ROW_H
   );
 
   return (
@@ -996,6 +995,13 @@ useEffect(() => {
     return list.filter(t => (t.symbol || t.id || '').toLowerCase().includes(searchQuery.toLowerCase()));
   }, [defaultTokens, searchQuery]);
 
+  // The wheel window is sized from the token count: half the visible rows
+  // either side of the centre, never wide enough to wrap an asset back on
+  // screen twice. With 5 tokens that is exactly 5 rows, so the whole list is
+  // on the phone with no duplicates and no clipping.
+  const wheelSpan = Math.max(1, Math.floor((Math.min(tokens.length, WHEEL_MAX_ROWS) - 1) / 2));
+  const wheelBoxH = (wheelSpan * 2 + 1) * WHEEL_ROW_H;
+
   const pickAsset = (t) => {
     handleMarketChange?.(t);
     setAssetOpen(false);
@@ -1143,7 +1149,7 @@ useEffect(() => {
     setAssetOpen(false);
   }, []);
 
-  // The rows to render, built by looking `WHEEL_SPAN` either side of the center
+  // The rows to render, built by looking `wheelSpan` either side of the center
   // and wrapping each index back into the token list. Because the indices are
   // virtual, the same asset reappears on the other end of the list and the
   // wheel can be scrolled forever with no visible end or seam.
@@ -1151,14 +1157,14 @@ useEffect(() => {
     const total = tokens.length;
     if (!total) return [];
     const rows = [];
-    for (let offset = -WHEEL_SPAN; offset <= WHEEL_SPAN; offset++) {
+    for (let offset = -wheelSpan; offset <= wheelSpan; offset++) {
       const virtualIdx = wheelCenter + offset;
       const token = tokens[wrapIdx(virtualIdx, total)];
       if (!token) continue;
       rows.push({ token, virtualIdx });
     }
     return rows;
-  }, [tokens, wheelCenter]);
+  }, [tokens, wheelCenter, wheelSpan]);
 
   // Slider change handler
   const handleSliderChange = (e) => {
@@ -1226,7 +1232,7 @@ useEffect(() => {
               ref={assetWheelRef}
               className="relative w-full flex flex-col items-center justify-center select-none"
               style={{
-                height: `${WHEEL_BOX_H}px`,
+                height: `${wheelBoxH}px`,
                 overflow: 'hidden',
                 touchAction: 'none',
                 WebkitUserSelect: 'none',
@@ -1253,6 +1259,7 @@ useEffect(() => {
                       isUnavailable={isUnavailable}
                       logo={logo}
                       wheelPos={wheelPos}
+                      boxH={wheelBoxH}
                       onTap={() => onWheelRowTap(virtualIdx)}
                     />
                   );
