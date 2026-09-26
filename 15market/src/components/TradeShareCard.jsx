@@ -403,7 +403,13 @@ const handleNativeShare = async () => {
                     background: isWin
                       ? 'linear-gradient(180deg, #17A364 0%, #0d6b42 100%)'
                       : 'linear-gradient(180deg, #EF5350 0%, #c62828 100%)',
-                    boxShadow: '-10px 0 30px rgba(0,0,0,0.7), 10px 0 30px rgba(0,0,0,0.7), 0 0 25px rgba(0,0,0,0.5)',
+                    // Shadows are cast to the LEFT only. An omni or rightward
+                    // glow spilled onto the 52px signature strip beside it and,
+                    // because the exported PNG is rasterized through an SVG
+                    // foreignObject where box-shadow blurs render far heavier
+                    // than on screen, that strip came out with a dark band that
+                    // did not match the rest of the card.
+                    boxShadow: '-10px 0 30px rgba(0,0,0,0.7)',
                   }}
                 >
                   <div className="absolute inset-0 opacity-[0.15] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
