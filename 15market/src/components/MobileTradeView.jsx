@@ -15,7 +15,23 @@ const LOGO_MAP = {
 };
 
 const WHEEL_ROW_H = 58;
-const WHEEL_VISIBLE = 5;
+const WHEEL_BOX_H = 320;
+// Rows rendered either side of the center. The box only ever shows 5 of them;
+// the extra pair is off-screen during a drag and slides in as the wheel turns,
+// which is what lets the list scroll forever without a visible seam.
+const WHEEL_SPAN = 3;
+
+// Modulo that always returns a valid index for arrays shorter than `n`.
+const wrapIdx = (n, total) => ((n % total) + total) % total;
+
+/**
+ * Nearest position congruent to `idx` in the infinite list.
+ *
+ * The wheel position is never reset to a small number, so switching assets
+ * moves the wheel by the fewest possible rows instead of jumping across the
+ * whole list — that is what keeps the loop seamless.
+ */
+const nearestWrappedIndex = (current, idx, total) => idx + Math.round((current - idx) / total) * total;
 
 function getLogoFilter(isLight) {
   if (isLight) return 'brightness(0)';
@@ -786,17 +802,22 @@ export default function MobileTradeView({
   const [selectedDuration, setSelectedDuration] = useState(15);
   const [stakeInput, setStakeInput] = useState('');
   const [sliderPct, setSliderPct] = useState(0);
-  const [wheelActiveIdx, setWheelActiveIdx] = useState(null);
   const wheelTouchStart = useRef(null);
   // Timestamp of the last real drag, so the click that follows a swipe is
   // swallowed instead of selecting a row or dismissing the sheet.
   const wheelSwipedAt = useRef(0);
   const wheelScrollAt = useRef(0);
 
-  // Continuous wheel position in row units (fractional while dragging).
-  // Dragged 1:1 with the finger, then spring-animated into place on release.
+  // Continuous wheel position in row units. Deliberately unbounded: the list
+  // loops forever, so the position keeps counting up (or down) and the asset
+  // under the center is derived with a modulo rather than clamped to the ends.
   const wheelPos = useMotionValue(0);
   const wheelSettle = useRef(null);
+  // Integer row currently in the center slot. Tracked in state because the
+  // rendered window of rows is built from it, while the smooth pixel movement
+  // stays on the motion value.
+  const [wheelCenter, setWheelCenter] = useState(0);
+  const wheelCenterRef = useRef(0);
 
   // Global / settled trades for the live market scroller
   const [tickerHistory, setTickerHistory] = useState(() => {
@@ -979,30 +1000,38 @@ useEffect(() => {
     return idx >= 0 ? idx : 0;
   }, [tokens, activeMarket]);
 
-  // A shorter token list (search filter) can strand the stored index out of
-  // range, so clamp on read rather than storing a stale value.
-  const maxWheelIdx = Math.max(0, tokens.length - 1);
-  const selectedWheelIdx = wheelActiveIdx !== null
-    ? Math.min(wheelActiveIdx, maxWheelIdx)
-    : null;
-  const effectiveActiveIdx = selectedWheelIdx !== null ? selectedWheelIdx : activeAssetIdx;
+  // Index of the asset sitting in the center slot right now. Derived with a
+  // modulo so it stays valid no matter how far the wheel has scrolled.
+  const centerAssetIdx = tokens.length ? wrapIdx(wheelCenter, tokens.length) : 0;
 
-  // Keep the motion value in sync when the wheel is not being dragged.
+  const setWheelCenterSafe = useCallback((n) => {
+    if (wheelCenterRef.current === n) return;
+    wheelCenterRef.current = n;
+    setWheelCenter(n);
+  }, []);
+
+  // Center the wheel on the committed asset whenever the sheet opens, when the
+  // asset is changed from the ticker, and when the sheet closes (which discards
+  // any uncommitted scrolling). Moves the fewest rows possible so the loop
+  // never visibly rewinds.
   useEffect(() => {
-    if (wheelTouchStart.current) return;
-    const next = Math.max(0, Math.min(maxWheelIdx, effectiveActiveIdx));
-    if (wheelPos.get() !== next) wheelPos.set(next);
-  }, [effectiveActiveIdx, maxWheelIdx, wheelPos]);
-
-  // ─── WHEEL NAVIGATION (continuous drag + momentum snap) ───
-  const settleWheelTo = useCallback((target, velocity = 0) => {
     const total = tokens.length;
-    if (!total) return;
-    const clamped = Math.max(0, Math.min(total - 1, target));
+    if (!total || wheelTouchStart.current) return;
+    const current = Math.round(wheelPos.get());
+    const target = nearestWrappedIndex(current, activeAssetIdx, total);
+    if (target !== current) wheelPos.set(target);
+    setWheelCenterSafe(target);
+  }, [assetOpen, activeAssetIdx, tokens.length, wheelPos, setWheelCenterSafe]);
+
+  // ─── WHEEL NAVIGATION (continuous drag, infinite loop) ───
+  // Targets are absolute positions in the unbounded list, never clamped, so
+  // the wheel can keep scrolling in either direction forever.
+  const settleWheelTo = useCallback((target, velocity = 0) => {
+    if (!tokens.length) return;
     if (wheelSettle.current) wheelSettle.current.stop();
     // Spring to the row, carrying the flick velocity so fast swipes coast
     // naturally instead of stopping dead.
-    wheelSettle.current = animate(wheelPos, clamped, {
+    wheelSettle.current = animate(wheelPos, target, {
       type: 'spring',
       stiffness: 260,
       damping: 30,
@@ -1010,15 +1039,8 @@ useEffect(() => {
       velocity,
       restDelta: 0.0005,
     });
-    setWheelActiveIdx(clamped === activeAssetIdx ? null : clamped);
-  }, [tokens.length, activeAssetIdx, wheelPos]);
-
-  const shiftWheel = useCallback((dir) => {
-    const total = tokens.length;
-    if (!total) return;
-    const current = wheelPos.get();
-    settleWheelTo(Math.round(current) + dir, 0);
-  }, [tokens.length, settleWheelTo, wheelPos]);
+    setWheelCenterSafe(target);
+  }, [tokens.length, wheelPos, setWheelCenterSafe]);
 
   const onWheelTouchStart = useCallback((e) => {
     const touch = e.touches && e.touches[0];
@@ -1043,13 +1065,11 @@ useEffect(() => {
     // Claim the gesture so the page behind never scrolls with the wheel.
     if (e.cancelable) e.preventDefault();
 
-    // Rubber-band resistance past the first and last row.
-    const raw = start.startPos - deltaY / WHEEL_ROW_H;
-    const max = Math.max(0, tokens.length - 1);
-    let next = raw;
-    if (raw < 0) next = raw * 0.35;
-    else if (raw > max) next = max + (raw - max) * 0.35;
+    // No rubber band and no clamp: the list loops, so there are no ends to
+    // resist against.
+    const next = start.startPos - deltaY / WHEEL_ROW_H;
     wheelPos.set(next);
+    setWheelCenterSafe(Math.round(next));
 
     // Track velocity in rows/second for momentum on release.
     const now = Date.now();
@@ -1060,20 +1080,19 @@ useEffect(() => {
       start.lastY = touch.clientY;
       start.lastT = now;
     }
-  }, [tokens.length, wheelPos]);
+  }, [wheelPos, setWheelCenterSafe]);
 
   const onWheelTouchEnd = useCallback(() => {
     const start = wheelTouchStart.current;
     wheelTouchStart.current = null;
     if (!start) return;
-    const total = tokens.length;
-    if (!total) return;
+    if (!tokens.length) return;
 
     // Project the flick forward so a fast swipe travels several rows.
     const projected = wheelPos.get() + start.velocity * 0.12;
     let target = Math.round(projected);
     // A short flick with no real velocity still counts as one row.
-    if (Math.abs(target - Math.round(start.startPos)) === 0 && start.velocity !== 0) {
+    if (target === Math.round(start.startPos) && Math.abs(start.velocity) > 0.5) {
       target = Math.round(start.startPos) + (start.velocity > 0 ? 1 : -1);
     }
     settleWheelTo(target, start.velocity);
@@ -1085,26 +1104,58 @@ useEffect(() => {
     const now = Date.now();
     if (now - wheelScrollAt.current < 120) return;
     wheelScrollAt.current = now;
-    shiftWheel(e.deltaY > 0 ? 1 : -1);
-  }, [shiftWheel]);
+    settleWheelTo(Math.round(wheelPos.get()) + (e.deltaY > 0 ? 1 : -1), 0);
+  }, [settleWheelTo, wheelPos]);
 
-  // Tapping a row scrolls the wheel to it instead of teleporting.
-  const scrollWheelTo = useCallback((idx) => {
+  // The selected asset. Tapping the row in the middle picks it; tapping any
+  // other row just brings that asset to the middle. This is the original
+  // design — scrolling only chooses the candidate, the center row commits it.
+  const onWheelRowTap = useCallback((virtualIdx) => {
     // Ignore the click that browsers synthesise at the end of a drag.
     if (Date.now() - wheelSwipedAt.current < 350) return;
-    settleWheelTo(idx, 0);
-  }, [settleWheelTo]);
+    const total = tokens.length;
+    if (!total) return;
+
+    if (Math.abs(virtualIdx - wheelPos.get()) > 0.5) {
+      settleWheelTo(virtualIdx, 0);
+      return;
+    }
+
+    const token = tokens[wrapIdx(virtualIdx, total)];
+    if (!token) return;
+    const id = token.id?.toLowerCase();
+    if (id === 'mon' || id === 'avax') return; // listed but not tradeable
+    pickAsset(token);
+    setAssetOpen(false);
+  }, [tokens, settleWheelTo, wheelPos]);
 
   const onWheelBackdropClick = useCallback(() => {
     if (Date.now() - wheelSwipedAt.current < 350) return;
     setAssetOpen(false);
   }, []);
 
-  // Vertical offset of the whole list. Position 0 sits the first row in the
-  // middle slot, so a fractional value gives a true continuous scroll.
+  // The rows to render, built by looking `WHEEL_SPAN` either side of the center
+  // and wrapping each index back into the token list. Because the indices are
+  // virtual, the same asset reappears on the other end of the list and the
+  // wheel can be scrolled forever with no visible end or seam.
+  const wheelRows = useMemo(() => {
+    const total = tokens.length;
+    if (!total) return [];
+    const rows = [];
+    for (let offset = -WHEEL_SPAN; offset <= WHEEL_SPAN; offset++) {
+      const virtualIdx = wheelCenter + offset;
+      const token = tokens[wrapIdx(virtualIdx, total)];
+      if (!token) continue;
+      rows.push({ token, virtualIdx });
+    }
+    return rows;
+  }, [tokens, wheelCenter]);
+
+  // Vertical offset of the whole list. Row 0 lands in the middle slot of the
+  // box, so a fractional position gives a true continuous scroll.
   const wheelY = useTransform(
     wheelPos,
-    (v) => (WHEEL_VISIBLE / 2 - 0.5) * WHEEL_ROW_H - v * WHEEL_ROW_H
+    (v) => (WHEEL_BOX_H / 2 - WHEEL_ROW_H / 2) - v * WHEEL_ROW_H
   );
 
   // Slider change handler
@@ -1167,12 +1218,13 @@ useEffect(() => {
             }}
             onClick={onWheelBackdropClick}
           >
-            {/* Continuous wheel — drag, flick, scroll, or tap a row */}
+            {/* Continuous wheel — drag, flick or scroll to browse, tap the row in
+                the middle to select. Scrolls forever in both directions. */}
             <div
               ref={assetWheelRef}
-              className="relative w-full select-none"
+              className="relative w-full flex flex-col items-center justify-center select-none"
               style={{
-                height: `${WHEEL_ROW_H * WHEEL_VISIBLE}px`,
+                height: `${WHEEL_BOX_H}px`,
                 overflow: 'hidden',
                 touchAction: 'none',
                 WebkitUserSelect: 'none',
@@ -1184,73 +1236,30 @@ useEffect(() => {
               onTouchCancel={onWheelTouchEnd}
               onWheel={onWheelMouseWheel}
             >
-              {/* Soft fade at the top and bottom edges */}
-              <div
-                className="absolute inset-x-0 top-0 z-20 pointer-events-none"
-                style={{
-                  height: `${WHEEL_ROW_H}px`,
-                  background: `linear-gradient(to bottom, ${isLight ? 'rgba(255,255,255,0.98)' : 'rgba(6,9,7,0.98)'}, transparent)`,
-                }}
-              />
-              <div
-                className="absolute inset-x-0 bottom-0 z-20 pointer-events-none"
-                style={{
-                  height: `${WHEEL_ROW_H}px`,
-                  background: `linear-gradient(to top, ${isLight ? 'rgba(255,255,255,0.98)' : 'rgba(6,9,7,0.98)'}, transparent)`,
-                }}
-              />
-
               <motion.div
                 className="absolute inset-x-0 top-0"
                 style={{ y: wheelY }}
               >
-                {tokens.map((t, i) => {
-                  const isUnavailable = t.id?.toLowerCase() === 'mon' || t.id?.toLowerCase() === 'avax';
-                  const logo = LOGO_MAP[t.id.toLowerCase()];
+                {wheelRows.map(({ token, virtualIdx }) => {
+                  const isUnavailable = token.id?.toLowerCase() === 'mon' || token.id?.toLowerCase() === 'avax';
+                  const logo = LOGO_MAP[token.id.toLowerCase()];
                   return (
                     <WheelRow
-                      key={t.id || i}
-                      token={t}
-                      index={i}
+                      // Keyed by the virtual index so React rebuilds the row when
+                      // the window slides onto a different copy of the list.
+                      key={`${token.id}-${virtualIdx}`}
+                      token={token}
+                      index={virtualIdx}
                       isLight={isLight}
                       isUnavailable={isUnavailable}
                       logo={logo}
                       wheelPos={wheelPos}
-                      onTap={() => scrollWheelTo(i)}
+                      onTap={() => onWheelRowTap(virtualIdx)}
                     />
                   );
                 })}
               </motion.div>
-
-              {/* Center highlight band */}
-              <div
-                className="absolute inset-x-4 z-10 pointer-events-none rounded-2xl"
-                style={{
-                  top: `${((WHEEL_VISIBLE - 1) / 2) * WHEEL_ROW_H}px`,
-                  height: `${WHEEL_ROW_H}px`,
-                  border: `1px solid ${isLight ? 'rgba(10,38,26,0.08)' : 'rgba(255,255,255,0.07)'}`,
-                  background: isLight ? 'rgba(23,163,100,0.05)' : 'rgba(23,163,100,0.08)',
-                }}
-              />
             </div>
-
-            {/* Confirm the row sitting in the center slot */}
-            <motion.button
-              type="button"
-              onClick={() => {
-                const token = tokens[effectiveActiveIdx];
-                if (!token) return;
-                const id = token.id?.toLowerCase();
-                if (id === 'mon' || id === 'avax') return;
-                pickAsset(token);
-                setWheelActiveIdx(null);
-              }}
-              whileTap={{ scale: 0.94 }}
-              className="mt-6 px-10 py-2.5 rounded-full text-[13px] font-bold text-white"
-              style={{ backgroundColor: '#17A364', fontFamily: '"Comfortaa", cursive' }}
-            >
-              Select {tokens[effectiveActiveIdx]?.symbol || ''}
-            </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1262,13 +1271,7 @@ useEffect(() => {
       <div className="flex-1 min-h-[140px] w-full relative pt-1 pb-1" style={{ overflow: 'visible' }}>
         {/* Selected Asset Ticker on Top Left of Chart Widget */}
         <button
-          onClick={() => setAssetOpen(o => {
-            if (!o) {
-              setWheelActiveIdx(null);
-              wheelPos.set(activeAssetIdx);
-            }
-            return !o;
-          })}
+          onClick={() => setAssetOpen(o => !o)}
           className="absolute top-3.5 left-5 z-30 flex items-center gap-2 bg-transparent border-none p-1 outline-none cursor-pointer active:scale-95 transition-transform"
         >
           {LOGO_MAP[(activeMarket?.id || 'eth').toLowerCase()] && (
