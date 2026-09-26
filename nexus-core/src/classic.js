@@ -520,7 +520,7 @@ class ClassicEngine {
     let realHash;
     try {
       // Ensure session wallet has native ARC for gas + stake
-      await this._ensureSessionWalletFunded(sessionWallet, stakeWei);
+      await this._ensureSessionWalletFunded(sessionWallet, stakeWei, userAddr);
 
       const data = this.contractInterface.encodeFunctionData('placeBet', [
         numericId, contractDir, duration, contractPrice, marketId, sessionWallet.address
@@ -770,7 +770,7 @@ class ClassicEngine {
     }
   }
 
-  async _ensureSessionWalletFunded(sessionWallet, requiredWei) {
+  async _ensureSessionWalletFunded(sessionWallet, requiredWei, userAddr) {
     const sessionBal = await rpc.getBalance(sessionWallet.address);
     const sessionBalNum = parseFloat(sessionBal || '0');
     const requiredNum = parseFloat(ethers.formatEther(requiredWei));
@@ -788,6 +788,20 @@ class ClassicEngine {
     console.log(`[SessionFunder] Session wallet ${sessionWallet.address.slice(0, 10)}... needs ${sendAmount} ARC (has ${sessionBalNum})`);
 
     try {
+      // Register this inflow BEFORE broadcasting. chainReconciler watches the
+      // session EOA for deposits and would otherwise credit our own gas money
+      // back to the user as trading balance on the next poll.
+      if (userAddr) {
+        try {
+          require('./services/chainReconciler').recordGasFunding(
+            userAddr,
+            ethers.parseEther(sendAmount.toFixed(6))
+          );
+        } catch (reconErr) {
+          console.warn('[SessionFunder] Could not record gas funding:', reconErr.message);
+        }
+      }
+
       const operatorBal = await rpc.getBalance(rpc.wallet.address);
       if (parseFloat(operatorBal || '0') < sendAmount + 0.1) {
         console.error(`[SessionFunder] Operator insufficient balance (${operatorBal}) to fund ${sendAmount} ARC`);

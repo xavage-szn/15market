@@ -131,7 +131,7 @@ function parseJsonField(v) {
 // Map in-memory camelCase profile -> Supabase snake_case row.
 // Undefined keys are dropped (JSON.stringify) so absent fields do not
 // overwrite existing column values on merge-upserts.
-function profileToRow(profile, includeTrades, includeOnboarding = true) {
+function profileToRow(profile, includeTrades, includeOnboarding = true, includeChainRecon = true) {
     const row = {
         address: profile.address,
         username: profile.username ?? null,
@@ -164,6 +164,12 @@ function profileToRow(profile, includeTrades, includeOnboarding = true) {
         wallet_address: profile.walletAddress ?? null,
         updated_at: new Date().toISOString()
     };
+    if (includeChainRecon) {
+        // NULL (not 0) means "never reconciled" — that distinction is what
+        // stops a restart from re-crediting an already-counted balance.
+        row.chain_baseline = profile.chainBaseline != null ? profile.chainBaseline : null;
+        row.chain_gas_owed = profile.chainGasOwed != null ? profile.chainGasOwed : null;
+    }
     if (includeOnboarding) {
         row.onboarded = profile.onboarded === true || !!profile.onboardedAt || !!profile.username;
         row.onboarded_at = profile.onboardedAt != null
@@ -213,6 +219,8 @@ function rowToProfile(row) {
         walletAddress: row.wallet_address,
         onboarded: row.onboarded === true || onboardedAt != null || !!row.username,
         onboardedAt,
+        chainBaseline: row.chain_baseline != null ? Number(row.chain_baseline) : null,
+        chainGasOwed: row.chain_gas_owed != null ? Number(row.chain_gas_owed) : null,
         createdAt: row.created_at ? Date.parse(row.created_at) : undefined,
         updatedAt: row.updated_at ? Date.parse(row.updated_at) : undefined
     };
@@ -226,6 +234,7 @@ class ProfileService {
     constructor() {
         this.profiles = {};
         this.sbFullPayload = true;       // false once optional columns are known to be missing
+        this.sbChainReconAvailable = true; // false once the chain-recon columns are known to be missing
         this.sbColumnsProbed = false;
         this.sbTradeTableAvailable = null;
         this.sbInitPromise = null;
@@ -348,10 +357,12 @@ class ProfileService {
         const profile = this.profiles[addr];
         if (!profile) return false;
 
+        const withRecon = this.sbChainReconAvailable !== false;
         const attempts = [
-            profileToRow(profile, this.sbFullPayload !== false, true),
-            profileToRow(profile, false, true),
-            profileToRow(profile, false, false)
+            profileToRow(profile, this.sbFullPayload !== false, true, withRecon),
+            profileToRow(profile, false, true, withRecon),
+            profileToRow(profile, false, true, false),
+            profileToRow(profile, false, false, false)
         ];
         let lastError = '';
         for (let i = 0; i < attempts.length; i++) {
@@ -360,7 +371,13 @@ class ProfileService {
                     method: 'POST',
                     body: JSON.stringify(attempts[i])
                 });
-                if (res.ok) return true;
+                if (res.ok) {
+                    // Remember the widest payload that worked so later upserts
+                    // stop paying for rejected round-trips.
+                    if (i === 2) this.sbFullPayload = false;
+                    else if (i === 3) this.sbChainReconAvailable = false;
+                    return true;
+                }
                 if (i === 0 && this.sbFullPayload !== false) this.sbFullPayload = false;
                 lastError = `${res.status} ${await res.text().catch(() => '')}`.slice(0, 300);
             } catch (e) {

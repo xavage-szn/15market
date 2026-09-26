@@ -38,6 +38,7 @@ const notificationService = require('./services/notificationService');
 const OddsEngine = require('./services/OddsEngine');
 const priceService = require('./services/priceService');
 const settlementPriceService = require('./services/settlementPriceService');
+const chainReconciler = require('./services/chainReconciler');
 
 // --- DYNAMICALLY DERIVED SOLANA RELAYER ADDRESS ---
 let derivedSolanaRelayerAddress = '11111111111111111111111111111111'; // default fallback
@@ -293,6 +294,12 @@ app.get('/settings', (req, res) => {
     treasuryAddress: config.TREASURY_ADDRESS
   });
 });
+
+// Deposit tx hashes already credited, so a retried or replayed
+// /session/deposit can never credit the same transfer twice. In-memory by
+// design: it guards against client retries and double-submits within a
+// process lifetime, which is the realistic double-credit window.
+const _creditedDepositTxs = new Set();
 
 // Main wallet balance — cached, refreshed periodically (no live RPC per request)
 let _mainBalanceCache = {}; // address -> { balance, updatedAt }
@@ -570,6 +577,15 @@ app.post('/session/init', async (req, res) => {
       }
     }
 
+    // Adopt the current on-chain balance as the reconciliation baseline so any
+    // USDC sent to the trading address AFTER this point is detected as a
+    // deposit. Deliberately credits nothing — this must never inflate balance.
+    try {
+      await chainReconciler.seedBaseline(userAddr, sessionAddress);
+    } catch (seedErr) {
+      console.warn('[session/init] baseline seed skipped:', seedErr.message);
+    }
+
     res.json({
       success: true,
       sessionAddress,
@@ -616,12 +632,26 @@ app.get('/session/balance/:address', async (req, res) => {
       });
     }
 
+    // ── On-chain reconciliation ──────────────────────────────────────────
+    // USDC sent directly to the trading wallet address (bypassing the app's
+    // deposit flow) would otherwise sit on-chain forever without ever being
+    // credited. This detects that inflow and credits it, after absorbing the
+    // platform's own gas top-ups. Failures here must never break the balance
+    // read — the virtual ledger is still returned below.
+    let reconciled = null;
+    try {
+      reconciled = await chainReconciler.reconcileSessionBalance(userAddr, sessionWallet.address);
+    } catch (reconErr) {
+      console.warn('[session/balance] reconcile skipped:', reconErr.message);
+    }
+
     const finalSession = cache.sessions.get(userAddr);
     res.json({ 
       success: true, 
       balance: String(finalSession ? finalSession.balance : profileBal), 
       sessionAddress: sessionWallet.address, 
-      source: 'session-cache' 
+      source: 'session-cache',
+      ...(reconciled && reconciled.credited > 0 ? { credited: reconciled.credited } : {})
     });
   } catch (err) {
     console.error('[session/balance] error:', err.message);
@@ -1158,55 +1188,159 @@ app.post('/session/cashout', async (req, res) => {
   }
 });
 
+/**
+ * POST /session/deposit
+ *
+ * Credits a deposit that the client already pushed on-chain to the session
+ * (trading) wallet.
+ *
+ * SECURITY: this endpoint moves value into a spendable trading balance, so the
+ * credit is only granted when BOTH hold:
+ *   1. a valid signature from `address` over a canonical message, and
+ *   2. an on-chain transfer that really paid `amount` to that user's session
+ *      wallet, mined successfully.
+ * The amount credited is derived from the receipt, never from the request, so
+ * a caller cannot inflate it. Previously this endpoint trusted the client's
+ * `amount` with no signature and no chain check at all.
+ *
+ * This is also the recovery path for USDC that reached the trading address
+ * before chain reconciliation existed.
+ */
 app.post('/session/deposit', async (req, res) => {
-  const { address, amount, txHash } = req.body;
+  const { address, amount, txHash, signature, message } = req.body;
   if (!address || !amount) return res.status(400).json({ error: "Missing data" });
 
   try {
     const userAddr = address.toLowerCase();
-    let session = cache.sessions.get(userAddr);
-    
-    console.log(`[Deposit] Request: ${amount} USDC for ${userAddr} | TX: ${txHash}`);
-
-    // Update balance optimistically in the backend cache
-    if (session) {
-      session.balance = Number((session.balance + parseFloat(amount)).toFixed(4));
-      profiles.upsert(userAddr, { balance: session.balance });
-      console.log(`[Deposit] Session updated: ${userAddr} new balance ${session.balance}`);
-    } else {
-      console.warn(`[Deposit] No active session found for ${userAddr}. Creating with derived addresses.`);
-      const sessionWallet = deriveSessionWallet(userAddr);
-      session = cache.getOrCreateSession(userAddr, { 
-        balance: parseFloat(amount),
-        identityKey: userAddr,
-        walletAddress: userAddr,
-        sessionAddress: sessionWallet.address
-      });
-      profiles.upsert(userAddr, { balance: parseFloat(amount) });
+    const requestedAmount = parseFloat(amount);
+    if (!isFinite(requestedAmount) || requestedAmount <= 0) {
+      return res.status(400).json({ error: "Invalid amount" });
     }
 
-    // Push to history
-    const depRecord = {
+    // ── 1. Signature check ────────────────────────────────────────────────
+    if (!signature || !message) {
+      return res.status(401).json({ error: "Signature required" });
+    }
+    let recovered;
+    try {
+      recovered = ethers.verifyMessage(message, signature);
+    } catch (sigErr) {
+      return res.status(401).json({ error: "Signature verification failed" });
+    }
+    if (recovered.toLowerCase() !== userAddr) {
+      return res.status(401).json({ error: "Invalid signature: address mismatch" });
+    }
+
+    // Bound signature replay. The in-memory tx set below is lost on restart,
+    // so without a freshness window a captured (message, signature) pair could
+    // be replayed later to re-credit the same transfer.
+    const tsMatch = /TIMESTAMP:\s*(\d+)/.exec(String(message));
+    if (!tsMatch) {
+      return res.status(401).json({ error: "Malformed confirmation message" });
+    }
+    const signedAt = Number(tsMatch[1]);
+    const age = Date.now() - signedAt;
+    const MAX_SIG_AGE_MS = 60 * 60 * 1000;   // 1 hour
+    const MAX_SIG_SKEW_MS = 5 * 60 * 1000;  // tolerate minor clock drift
+    if (!isFinite(signedAt) || age > MAX_SIG_AGE_MS || age < -MAX_SIG_SKEW_MS) {
+      return res.status(401).json({ error: "Confirmation expired, please retry the deposit" });
+    }
+
+    // ── 2. On-chain verification ──────────────────────────────────────────
+    let creditedAmount = requestedAmount;
+    if (txHash) {
+      const sessionWallet = deriveSessionWallet(userAddr);
+      // Short poll: this runs inside an HTTP request. The client retries and
+      // the on-chain reconciler is the backstop if it is still pending.
+      const receipt = await rpc.waitForReceipt(txHash, 4, 1500);
+
+      if (!receipt) {
+        // 503 (not 4xx) on purpose: the transfer was just broadcast and is
+        // usually still pending. The client retries on 5xx, and the on-chain
+        // reconciler is the backstop if every retry is exhausted.
+        return res.status(503).json({ error: "Deposit transaction not confirmed yet" });
+      }
+      if (receipt.status !== 1) {
+        return res.status(400).json({ error: "Deposit transaction reverted" });
+      }
+
+      // Native USDC transfer on Arc: recipient is `to`, amount is `value`.
+      const recipient = String(receipt.to || '').toLowerCase();
+      if (recipient !== sessionWallet.address.toLowerCase()) {
+        return res.status(400).json({
+          error: `Deposit was not sent to this trading wallet (paid to ${recipient})`
+        });
+      }
+
+      const onChainAmount = parseFloat(ethers.formatEther(receipt.value || 0));
+      if (!isFinite(onChainAmount) || onChainAmount <= 0) {
+        return res.status(400).json({ error: "Transaction transferred no value" });
+      }
+      // Small tolerance so float representation cannot fail an honest claim.
+      if (onChainAmount + 1e-9 < requestedAmount) {
+        return res.status(400).json({
+          error: `On-chain amount ${onChainAmount} is less than the claimed ${requestedAmount}`
+        });
+      }
+      // Credit what the chain says arrived, never what the client asked for.
+      creditedAmount = onChainAmount;
+    } else {
+      // No tx to verify: refuse rather than trust an unverifiable claim.
+      return res.status(400).json({ error: "txHash is required to verify a deposit" });
+    }
+
+    // ── 3. Idempotency: never credit the same transfer twice ──────────────
+    if (_creditedDepositTxs.has(txHash.toLowerCase())) {
+      return res.status(409).json({ error: "Deposit already credited" });
+    }
+
+    let session = cache.sessions.get(userAddr);
+    const newBalance = Number(((session ? session.balance : 0) + creditedAmount).toFixed(6));
+
+    if (session) {
+      session.balance = newBalance;
+    } else {
+      const sessionWallet = deriveSessionWallet(userAddr);
+      session = cache.getOrCreateSession(userAddr, {
+        identityKey: userAddr,
+        walletAddress: userAddr,
+        sessionAddress: sessionWallet.address,
+        balance: newBalance
+      });
+    }
+    profiles.upsert(userAddr, { balance: session.balance });
+    _creditedDepositTxs.add(txHash.toLowerCase());
+
+    // The reconciler watches the same on-chain balance. Advance the baseline by
+    // exactly what we just credited so it does not credit this transfer again.
+    try {
+      chainReconciler.advanceBaselineForCreditedDeposit(userAddr, creditedAmount);
+    } catch (reconErr) {
+      console.warn('[Deposit] baseline advance failed:', reconErr.message);
+    }
+
+    console.log(`[Deposit] Verified credit: ${creditedAmount} USDC to ${userAddr} | TX: ${txHash}`);
+
+    cache.pushHistory(userAddr, {
       type: 'DEPOSIT',
-      amount: parseFloat(amount),
+      amount: creditedAmount,
       timestamp: Date.now(),
       txHash,
-      status: 'PENDING'
-    };
-    cache.pushHistory(userAddr, depRecord);
+      status: 'CONFIRMED',
+      source: 'verified-deposit'
+    });
 
-    // Broadcast instant update
     io.to(userAddr).emit('balance_update', {
-      balance: String(session?.balance || amount),
-      reason: 'DEPOSIT_OPTIMISTIC',
-      amount,
+      balance: String(session.balance),
+      reason: 'DEPOSIT_CONFIRMED',
+      amount: creditedAmount,
       txHash
     });
 
-    emitAdminStats(); // Notify admin of new deposit
-    console.log(`[Deposit] Optimistic credit: ${amount} USDC to ${userAddr} | TX: ${txHash}`);
-    res.json({ success: true, balance: session?.balance });
+    emitAdminStats();
+    res.json({ success: true, balance: session.balance, credited: creditedAmount });
   } catch (err) {
+    console.error('[Deposit] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2700,6 +2834,11 @@ app.post('/copy-trading/providers/:address/withdraw', async (req, res) => {
 });
 
 // --- Start ---
+// Exported so services (e.g. chainReconciler) can push real-time socket
+// updates without duplicating the server handle. Required lazily at call time,
+// never at module load, to avoid a circular import.
+module.exports = { app, server, io };
+
 server.listen(config.PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Nexus Core (Embedded Wallet Mode) listening on port ${config.PORT}\n`);
 });

@@ -1245,6 +1245,13 @@ const performStealthChecks = useCallback(async (addr) => {
         }
       }
 
+      if (data.reason === 'DEPOSIT_DETECTED') {
+        const amt = parseFloat(data.amount || 0);
+        if (amt > 0) {
+          notify(`${amt.toFixed(4)} USDC received in your trading wallet`, "success");
+        }
+      }
+
       if (data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED') {
         const payoutAmt = parseFloat(data.payout || 0);
         const reasonLabel = data.reason === 'WIN_PAYOUT_SETTLED' ? 'Confirmed' : 'Received';
@@ -2657,6 +2664,77 @@ const performStealthChecks = useCallback(async (addr) => {
 
 
   /**
+   * Credits a completed on-chain deposit in the backend ledger.
+   *
+   * The USDC has already been transferred by the time this runs, so a silent
+   * failure here means real money sitting in the trading wallet that nothing
+   * credits. We therefore:
+   *   - sign the request (the backend rejects unsigned credits), and
+   *   - retry with backoff, warning the user if it ultimately fails so they can
+   *     re-submit rather than believing the money arrived in their balance.
+   *
+   * @returns {Promise<boolean>} whether the backend acknowledged the credit.
+   */
+  const confirmDepositOnBackend = useCallback(async ({ address, amount, txHash, signMessage }) => {
+    const canonical = [
+      '--- 15MARKET PROTOCOL ---',
+      'ACTION: CONFIRM DEPOSIT',
+      `AMOUNT: ${Number(amount).toFixed(6)} USDC`,
+      `TX: ${txHash}`,
+      `TIMESTAMP: ${Date.now()}`
+    ].join('\n');
+
+    let signature = null;
+    try {
+      signature = await signMessage(canonical);
+    } catch (signErr) {
+      notify("Deposit sent on-chain, but signing the confirmation failed. Balance may not update.", "error");
+      return false;
+    }
+
+    const attempts = [0, 2000, 5000, 12000];
+    for (let i = 0; i < attempts.length; i++) {
+      if (attempts[i] > 0) await new Promise(r => setTimeout(r, attempts[i]));
+      try {
+        const res = await fetch(`${KEEPER_URL_ARC}/session/deposit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            amount,
+            txHash,
+            message: canonical,
+            signature
+          })
+        });
+        if (res.ok) {
+          updateEvmSessionBal(true);
+          return true;
+        }
+        // 409 means this exact transfer was already credited — success from
+        // the user's point of view, so do not surface it as a failure.
+        if (res.status === 409) {
+          updateEvmSessionBal(true);
+          return true;
+        }
+        // Other 4xx means the request itself is wrong — retrying will not help.
+        if (res.status >= 400 && res.status < 500) {
+          const body = await res.json().catch(() => ({}));
+          notify(body.error || "Deposit confirmation rejected.", "error");
+          return false;
+        }
+        // 5xx / network error — the transfer is probably still pending. Retry.
+      } catch {
+        // Network error — retry.
+      }
+    }
+
+    notify("Deposit is on-chain but not yet credited. It will be detected automatically — do not resend.", "error");
+    return false;
+  }, [notify, updateEvmSessionBal]);
+
+
+  /**
    * DEPOSIT HANDLER
    * ---------------
    * Manages the flow of moving funds from the user's primary wallet (MetaMask/Base)
@@ -2665,8 +2743,8 @@ const performStealthChecks = useCallback(async (addr) => {
    * CRITICAL LOGIC:
    * 1. 1% PLATFORM FEE: We split the user's deposit on-chain. 99% goes to the session wallet, 
    *    and 1% goes to the Platform Treasury immediately.
-   * 2. OPTIMISTIC CREDITING: We notify the backend to credit the 99% amount immediately 
-   *    to provide a zero-latency trading experience.
+   * 2. VERIFIED CREDITING: The backend re-checks the transfer on-chain and credits
+   *    the 99% amount, so a dropped request can never silently lose the credit.
    * 3. MULTI-TRANSACTION FLOW: This involves two separate on-chain transactions.
    * 
    * @param {string|number} amt - The amount of USDC to deposit.
@@ -2759,23 +2837,28 @@ const performStealthChecks = useCallback(async (addr) => {
           account: address,
         });
 
-
-        // STEP 3: Backend Synchronization
-        // Inform the backend of the successful deposit so it can credit the user history
-        fetch(`${KEEPER_URL_ARC}/session/deposit`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address, amount: depositAmt, txHash: hash })
-        }).catch(() => { });
-
-        // STEP 4: Optimistic Local State Update
-        // Provides immediate visual feedback to the user before block confirmation
+        // STEP 3: Optimistic Local State Update
+        // Provides immediate visual feedback before block confirmation.
         setSessionBalance(prev => prev + depositAmt);
         setEvmBalance(prev => {
           const current = parseFloat(prev || '0');
           return (current - amtNum).toFixed(6);
         });
         lastOptimisticActionTime.current = Date.now();
+
+        // STEP 4: Tell the backend to credit the ledger.
+        //
+        // This MUST NOT be fire-and-forget. The USDC is already on-chain at
+        // this point, so if this call is dropped the user's money sits in the
+        // trading wallet with nothing crediting it. The backend now requires a
+        // signature and verifies the transfer against the chain, and we retry
+        // with backoff before finally telling the user it did not land.
+        await confirmDepositOnBackend({
+          address,
+          amount: depositAmt,
+          txHash: hash,
+          signMessage: (msg) => walletClient.signMessage({ message: msg, account: address }),
+        });
 
         // STEP 5: Re-pull on-chain + session balances from source of truth after
         // the deposit tx confirms so every device shows the same updated state.
@@ -2803,7 +2886,7 @@ const performStealthChecks = useCallback(async (addr) => {
     } finally {
       setIsExecuting(false);
     }
-  }, [address, notify, evmBalance, evmSessionWallet, updateEvmSessionBal, refetchEvmBalance, isExecuting, walletClient]);
+  }, [address, notify, evmBalance, evmSessionWallet, updateEvmSessionBal, refetchEvmBalance, isExecuting, walletClient, confirmDepositOnBackend]);
 
 
   /**

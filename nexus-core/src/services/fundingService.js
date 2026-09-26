@@ -355,6 +355,12 @@ class FundingService {
 
     /**
      * Credits a user's platform trading balance (in-memory + DB).
+     *
+     * Every caller of this method is crediting a deposit whose USDC has
+     * already arrived in the session wallet on-chain. chainReconciler watches
+     * that same on-chain balance to catch deposits that bypassed the app
+     * entirely, so it must be told to move its baseline by the same amount —
+     * otherwise it would credit these deposits a second time.
      */
     async creditTradingWallet(userAddr, amount, txHash) {
         const amountNum = parseFloat(amount);
@@ -362,6 +368,15 @@ class FundingService {
 
         const addr = userAddr.toLowerCase();
         console.log(`[FundingService] Crediting ${amountNum} USDC to ${addr} (tx: ${txHash})`);
+
+        // Keep the reconciliation baseline in step with the on-chain inflow
+        // this credit represents. Done first so a crash mid-credit cannot leave
+        // the baseline permanently ahead of the chain.
+        try {
+            require('./chainReconciler').advanceBaselineForCreditedDeposit(addr, amountNum);
+        } catch (reconErr) {
+            console.warn('[FundingService] baseline advance failed:', reconErr.message);
+        }
 
         let newBalance = amountNum;
 
@@ -536,6 +551,16 @@ class FundingService {
             const currentBalance = session ? session.balance : parseFloat(amount || 0);
             // Persist to profile so balance survives restarts
             profiles.upsert(userAddr, { balance: currentBalance });
+
+            // Step 5b: The USDC has now actually landed in the session wallet on
+            // Arc. Move the reconciliation baseline up by the same amount so
+            // chainReconciler sees no unexplained inflow and does not credit
+            // this bridge a second time on top of the optimistic credit.
+            try {
+                require('./chainReconciler').advanceBaselineForCreditedDeposit(userAddr, amount);
+            } catch (reconErr) {
+                console.warn('[CCTP-Relayer] baseline advance failed:', reconErr.message);
+            }
 
             // Trigger CCTP Bridge Confirmed notification
             notificationService.notifyUser(
