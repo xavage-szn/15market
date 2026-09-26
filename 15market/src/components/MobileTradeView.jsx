@@ -51,6 +51,12 @@ function WheelRow({ token, index, isLight, isUnavailable, logo, wheelPos, onTap 
   const logoSize = useTransform(distance, [0, 1, 2, 3], [40, 28, 20, 17]);
   const blur = useTransform(distance, [0, 1, 2, 3], [0, 0, 0.4, 0.9]);
   const rowFilter = useTransform(blur, (b) => (b > 0.01 ? `blur(${b}px)` : 'blur(0px)'));
+  // Each row offsets itself from the shared position, so when the window slides
+  // one row the offset resolves unchanged and no DOM node ever jumps.
+  const y = useTransform(
+    wheelPos,
+    (v) => (WHEEL_BOX_H / 2 - WHEEL_ROW_H / 2) - (index - v) * WHEEL_ROW_H
+  );
 
   return (
     <motion.button
@@ -59,6 +65,7 @@ function WheelRow({ token, index, isLight, isUnavailable, logo, wheelPos, onTap 
       className="w-full flex items-center justify-center gap-2 px-6 bg-transparent border-none outline-none"
       style={{
         height: `${WHEEL_ROW_H}px`,
+        y,
         scale,
         opacity,
         filter: rowFilter,
@@ -1017,9 +1024,10 @@ useEffect(() => {
   useEffect(() => {
     const total = tokens.length;
     if (!total || wheelTouchStart.current) return;
+    if (wheelSettle.current) { wheelSettle.current.stop(); wheelSettle.current = null; }
     const current = Math.round(wheelPos.get());
     const target = nearestWrappedIndex(current, activeAssetIdx, total);
-    if (target !== current) wheelPos.set(target);
+    wheelPos.jump(target);
     setWheelCenterSafe(target);
   }, [assetOpen, activeAssetIdx, tokens.length, wheelPos, setWheelCenterSafe]);
 
@@ -1037,7 +1045,8 @@ useEffect(() => {
       damping: 30,
       mass: 0.9,
       velocity,
-      restDelta: 0.0005,
+      restDelta: 0.01,
+      restSpeed: 0.01,
     });
     setWheelCenterSafe(target);
   }, [tokens.length, wheelPos, setWheelCenterSafe]);
@@ -1151,13 +1160,6 @@ useEffect(() => {
     return rows;
   }, [tokens, wheelCenter]);
 
-  // Vertical offset of the whole list. Row 0 lands in the middle slot of the
-  // box, so a fractional position gives a true continuous scroll.
-  const wheelY = useTransform(
-    wheelPos,
-    (v) => (WHEEL_BOX_H / 2 - WHEEL_ROW_H / 2) - v * WHEEL_ROW_H
-  );
-
   // Slider change handler
   const handleSliderChange = (e) => {
     const pct = parseFloat(e.target.value);
@@ -1236,18 +1238,15 @@ useEffect(() => {
               onTouchCancel={onWheelTouchEnd}
               onWheel={onWheelMouseWheel}
             >
-              <motion.div
-                className="absolute inset-x-0 top-0"
-                style={{ y: wheelY }}
-              >
-                {wheelRows.map(({ token, virtualIdx }) => {
+              <motion.div className="absolute inset-x-0 top-0">
+                {wheelRows.map(({ token, virtualIdx }, slot) => {
                   const isUnavailable = token.id?.toLowerCase() === 'mon' || token.id?.toLowerCase() === 'avax';
                   const logo = LOGO_MAP[token.id.toLowerCase()];
                   return (
                     <WheelRow
-                      // Keyed by the virtual index so React rebuilds the row when
-                      // the window slides onto a different copy of the list.
-                      key={`${token.id}-${virtualIdx}`}
+                      // Keyed by slot so rows keep their nodes and loaded
+                      // logos; only the asset each slot shows changes.
+                      key={`wheel-slot-${slot}`}
                       token={token}
                       index={virtualIdx}
                       isLight={isLight}
