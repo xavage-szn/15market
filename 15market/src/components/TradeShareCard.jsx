@@ -130,18 +130,6 @@ const captureCard = async () => {
   const el = cardRef.current;
   if (!el) return null;
 
-  if (document.fonts?.ready) {
-    try {
-      await Promise.all([
-        document.fonts.load('22px "Autography"'),
-        document.fonts.load('400 15px "Comfortaa"'),
-        document.fonts.load('700 15px "Comfortaa"'),
-        document.fonts.load('900 15px "Comfortaa"'),
-      ]);
-      await document.fonts.ready;
-    } catch {}
-  }
-
   const whiteLogoDataUrls = new Map();
   const logoImages = Array.from(el.querySelectorAll('img[data-card-logo]'));
   for (const image of logoImages) {
@@ -154,24 +142,11 @@ const captureCard = async () => {
     width: 520,
     height: 300,
     scale: 2,
+    backgroundColor: '#0a0a0a',
     drawImageInterval: 200,
     style: {
-      width: '520px',
-      height: '300px',
-      minWidth: '520px',
-      minHeight: '300px',
-      maxWidth: '520px',
-      maxHeight: '300px',
-      margin: '0',
-      padding: '0',
-      boxSizing: 'border-box',
-      overflow: 'hidden',
-      outline: 'none',
       borderRadius: '0px',
-      boxShadow: 'none',
-      transform: 'none',
-      transformOrigin: 'top left',
-      background: 'linear-gradient(145deg, #0a0a0a 0%, #111118 40%, #0a0a0a 100%)',
+      transform: 'none'
     },
     filter: (node) => !node.classList?.contains('copy-id-btn'),
     onCloneEachNode: (node) => {
