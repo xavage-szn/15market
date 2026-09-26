@@ -68,11 +68,36 @@ redis.on('error', (err) => {});
 // --- Setup Server ---
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: config.ALLOWED_ORIGINS } });
+
+/**
+ * CORS origin policy.
+ *
+ * In production this is the exact ALLOWED_ORIGINS allowlist and nothing else.
+ * Outside production it additionally accepts loopback and private-LAN origins
+ * on ANY port, because the frontend treats all of them as "local" and then
+ * calls `http://<that-host>:<PORT>` (see 15market/src/constants.js). Without
+ * this, 127.0.0.1, 192.168.x.x and Vite's port fallback (5174) get no
+ * Access-Control-Allow-Origin header and the browser silently drops the
+ * response — which looks exactly like "my balance is not loading".
+ */
+const isAllowedOrigin = (origin) => {
+    if (!origin) return false;
+    if (config.ALLOWED_ORIGINS.includes(origin)) return true;
+    if (process.env.NODE_ENV === 'production') return false;
+    try {
+        const { hostname } = new URL(origin);
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]') return true;
+        if (/^192\.168\./.test(hostname) || /^10\./.test(hostname) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)) return true;
+    } catch { /* malformed origin — not allowed */ }
+    return false;
+};
+
+const corsOptions = { origin: (origin, cb) => cb(null, isAllowedOrigin(origin)), credentials: true };
+const io = new Server(server, { cors: corsOptions });
 notificationService.init(io);
 
 
-app.use(cors({ origin: config.ALLOWED_ORIGINS }));
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // --- Deterministic Session Wallet Derivation ---
@@ -579,12 +604,13 @@ app.post('/session/init', async (req, res) => {
 
     // Adopt the current on-chain balance as the reconciliation baseline so any
     // USDC sent to the trading address AFTER this point is detected as a
-    // deposit. Deliberately credits nothing — this must never inflate balance.
-    try {
-      await chainReconciler.seedBaseline(userAddr, sessionAddress);
-    } catch (seedErr) {
-      console.warn('[session/init] baseline seed skipped:', seedErr.message);
-    }
+    // deposit. Deliberately credits nothing - this must never inflate balance.
+    //
+    // Detached on purpose: with several slow RPC providers this read can take
+    // longer than the client's fetch timeout, and a blocked /session/init would
+    // look like a failed connection. The next balance poll seeds it instead.
+    chainReconciler.seedBaseline(userAddr, sessionAddress)
+        .catch((seedErr) => console.warn('[session/init] baseline seed skipped:', seedErr.message));
 
     res.json({
       success: true,
@@ -636,22 +662,22 @@ app.get('/session/balance/:address', async (req, res) => {
     // USDC sent directly to the trading wallet address (bypassing the app's
     // deposit flow) would otherwise sit on-chain forever without ever being
     // credited. This detects that inflow and credits it, after absorbing the
-    // platform's own gas top-ups. Failures here must never break the balance
-    // read — the virtual ledger is still returned below.
-    let reconciled = null;
-    try {
-      reconciled = await chainReconciler.reconcileSessionBalance(userAddr, sessionWallet.address);
-    } catch (reconErr) {
-      console.warn('[session/balance] reconcile skipped:', reconErr.message);
-    }
+    // platform's own gas top-ups.
+    //
+    // Detached on purpose. The RPC read fans out across providers and can
+    // outlast the frontend's 6s fetch timeout, which would make the whole
+    // balance response get discarded — the exact "my balance never loads"
+    // symptom this was meant to fix. The ledger is returned immediately and
+    // the credit arrives via the balance_update socket push, or the next poll.
+    chainReconciler.reconcileSessionBalance(userAddr, sessionWallet.address)
+        .catch((reconErr) => console.warn('[session/balance] reconcile skipped:', reconErr.message));
 
     const finalSession = cache.sessions.get(userAddr);
     res.json({ 
       success: true, 
       balance: String(finalSession ? finalSession.balance : profileBal), 
       sessionAddress: sessionWallet.address, 
-      source: 'session-cache',
-      ...(reconciled && reconciled.credited > 0 ? { credited: reconciled.credited } : {})
+      source: 'session-cache'
     });
   } catch (err) {
     console.error('[session/balance] error:', err.message);

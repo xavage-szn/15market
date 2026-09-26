@@ -119,14 +119,30 @@ class RPCManager {
   }
 
   async getBalance(address) {
-    if (this.providers.length === 0) return "0";
+    const bal = await this.tryGetBalance(address);
+    return bal === null ? "0" : bal;
+  }
+
+  /**
+   * Balance read that distinguishes "RPC failed" from "balance is zero".
+   *
+   * getBalance() returns "0" when every provider errors, which is fine for
+   * display but fatal for accounting: a failed read looks like the user drained
+   * their wallet, and the next good read would credit the whole balance back as
+   * a deposit. Callers doing reconciliation must use this and skip the cycle
+   * on null.
+   *
+   * @returns {Promise<string|null>} formatted balance, or null if no provider answered
+   */
+  async tryGetBalance(address) {
+    if (this.providers.length === 0) return null;
     for (let i = 0; i < this.providers.length; i++) {
       try {
         const bal = await this.callWithTimeout(this.providers[i].getBalance(address, 'pending'), 5000);
         return ethers.formatEther(bal);
       } catch {}
     }
-    return "0";
+    return null;
   }
 
   deriveSessionWallet(userAddr) {

@@ -17,6 +17,7 @@ const profilesStore = {};
 const sessionsStore = new Map();
 const history = [];
 let onChainBalance = '0';
+let rpcDown = false;
 let ledger = 0;
 
 const doubles = {
@@ -35,7 +36,9 @@ const doubles = {
         },
         pushHistory: (addr, rec) => history.push({ addr, rec })
     },
-    rpc: { getBalance: async () => onChainBalance },
+    // tryGetBalance returns null to mean "no provider answered", which must
+    // never be mistaken for a zero balance.
+    rpc: { tryGetBalance: async () => (rpcDown ? null : onChainBalance) },
     getFundingService: () => ({
         creditTradingWallet: async (addr, amount) => {
             ledger += amount;
@@ -58,6 +61,7 @@ function reset() {
     sessionsStore.clear();
     history.length = 0;
     onChainBalance = '0';
+    rpcDown = false;
     ledger = 0;
     reconciler.__reset();
 }
@@ -218,6 +222,55 @@ async function test(name, fn) {
         totalCredited += (await reconciler.reconcileSessionBalance(USER, SESSION, { force: true })).credited;
 
         assert.strictEqual(totalCredited, 8, 'exactly the two deposits (5 + 3), never the gas');
+    });
+
+    // Regression guard: rpc.getBalance() returns "0" when every provider
+    // errors. If the reconciler trusted that, an outage would look like a
+    // drained wallet and the next good read would credit the entire on-chain
+    // balance — gas top-ups included — as a user deposit.
+    await test('RPC outage does not move the baseline', async () => {
+        profilesStore[USER] = { chainBaseline: 10, chainGasOwed: 0 };
+        sessionsStore.set(USER, { balance: 10 });
+
+        rpcDown = true;
+        const out = await reconciler.reconcileSessionBalance(USER, SESSION, { force: true });
+        assert.strictEqual(out.credited, 0, 'no credit while RPC is unavailable');
+        assert.strictEqual(out.reason, 'rpc-unavailable');
+        assert.strictEqual(profilesStore[USER].chainBaseline, 10, 'baseline must be untouched');
+
+        // RPC recovers: the real 10 is still there and must not be credited.
+        rpcDown = false;
+        onChainBalance = '10';
+        const after = await reconciler.reconcileSessionBalance(USER, SESSION, { force: true });
+        assert.strictEqual(after.credited, 0, 'the existing 10 must not become a deposit');
+        assert.strictEqual(sessionsStore.get(USER).balance, 10);
+    });
+
+    // Same hazard on the very first observation: a failed read must not seed
+    // a baseline of 0, which would make the real balance look like a deposit.
+    await test('RPC outage does not seed a false zero baseline', async () => {
+        rpcDown = true;
+        const seeded = await reconciler.seedBaseline(USER, SESSION);
+        assert.strictEqual(seeded, false, 'seed must fail closed');
+        assert.ok(profilesStore[USER] === undefined || profilesStore[USER].chainBaseline == null,
+            'no zero baseline may be written');
+
+        rpcDown = false;
+        onChainBalance = '10';
+        const out = await reconciler.reconcileSessionBalance(USER, SESSION, { force: true });
+        assert.strictEqual(out.reason, 'baseline-seeded');
+        assert.strictEqual(out.credited, 0, 'adopting the balance must not credit it');
+        assert.strictEqual(sessionsStore.get(USER) ? sessionsStore.get(USER).balance : 0, 0);
+    });
+
+    // Gas can be funded before the first balance observation. Seeding must
+    // not wipe that debt, or the gas comes back as a user deposit.
+    await test('seeding preserves gas already owed', async () => {
+        profilesStore[USER] = { chainGasOwed: 2 };
+        onChainBalance = '2';
+        await reconciler.seedBaseline(USER, SESSION);
+        assert.strictEqual(profilesStore[USER].chainGasOwed, 2, 'gas debt must survive the seed');
+        assert.strictEqual(profilesStore[USER].chainBaseline, 2);
     });
 
     console.log(`\n${passed} passing, ${failed} failing\n`);

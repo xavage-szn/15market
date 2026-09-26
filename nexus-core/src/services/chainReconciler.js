@@ -137,9 +137,14 @@ async function seedBaseline(userAddr, sessionAddress) {
     const { baseline } = readState(addr);
     if (baseline != null) return false;
     try {
-        const onChain = parseFloat(await deps.rpc.getBalance(sessionAddress) || '0');
+        const raw = await deps.rpc.tryGetBalance(sessionAddress);
+        if (raw == null) return false; // RPC unavailable — do NOT seed a fake 0
+        const onChain = parseFloat(raw);
         if (!isFinite(onChain)) return false;
-        writeState(addr, { baseline: onChain, gasOwed: 0 });
+        // Preserve any gas debt already recorded: the funder can top up before
+        // the first balance observation, and zeroing it here would hand that
+        // gas back to the user as a deposit on the next pass.
+        writeState(addr, { baseline: onChain, gasOwed: readState(addr).gasOwed });
         console.log(`[ChainReconciler] Baseline seeded for ${addr}: ${onChain}`);
         return true;
     } catch (e) {
@@ -166,14 +171,19 @@ async function reconcileSessionBalance(userAddr, sessionAddress, opts = {}) {
     LAST_RUN.set(addr, now);
 
     const task = (async () => {
-        const onChain = parseFloat(await deps.rpc.getBalance(sessionAddress) || '0');
+        // A failed read must never be treated as a zero balance. If we recorded
+        // 0 here, the next successful read would look like a huge deposit and
+        // credit the user's entire on-chain balance, gas included.
+        const raw = await deps.rpc.tryGetBalance(sessionAddress);
+        if (raw == null) return { credited: 0, reason: 'rpc-unavailable' };
+        const onChain = parseFloat(raw);
         if (!isFinite(onChain)) return { credited: 0, reason: 'rpc-failed' };
 
         const { baseline, gasOwed } = readState(addr);
 
         // ── First observation: adopt, never credit ──────────────────────
         if (baseline == null) {
-            writeState(addr, { baseline: onChain, gasOwed: 0 });
+            writeState(addr, { baseline: onChain, gasOwed });
             console.log(`[ChainReconciler] Baseline seeded for ${addr}: ${onChain} (no credit on first pass)`);
             return { credited: 0, reason: 'baseline-seeded', onChain };
         }
