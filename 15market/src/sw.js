@@ -2,9 +2,10 @@
 /**
  * 15MARKET Service Worker — PWA offline pre-cache only.
  */
-import { precacheAndRoute } from 'workbox-precaching';
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 
 precacheAndRoute(self.__WB_MANIFEST);
+cleanupOutdatedCaches();
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

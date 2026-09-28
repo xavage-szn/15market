@@ -24,7 +24,11 @@ export default defineConfig({
       filename: 'sw.js',
       injectManifest: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,ttf,woff2,json}'],
+        // index.html is deliberately excluded. Precaching it makes the service
+        // worker serve a stale document shell after a redeploy, so the browser
+        // requests hashed chunk names that no longer exist and every component
+        // fails to load. Navigations must always hit the network.
+        globPatterns: ['**/*.{js,css,ico,png,svg,ttf,woff2,json}'],
       },
       manifest: {
         name: '15Market Systems',
