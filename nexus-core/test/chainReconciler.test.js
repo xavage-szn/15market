@@ -273,6 +273,64 @@ async function test(name, fn) {
         assert.strictEqual(profilesStore[USER].chainBaseline, 2);
     });
 
+    // ── On-chain source of truth ──────────────────────────────────────────
+    console.log('\non-chain spendable balance\n');
+
+    await test('spendable is the on-chain balance minus the gas float', async () => {
+        profilesStore[USER] = { chainGasOwed: 2 };
+        onChainBalance = '32.010903';
+        const out = await reconciler.getOnChainSpendable(USER, SESSION);
+        assert.strictEqual(out.spendable, 30.010903, 'gas float must not be spendable');
+        assert.strictEqual(out.onChain, 32.010903);
+    });
+
+    await test('no gas debt means the whole balance is spendable', async () => {
+        profilesStore[USER] = { chainGasOwed: 0 };
+        onChainBalance = '5.7311';
+        const out = await reconciler.getOnChainSpendable(USER, SESSION);
+        assert.strictEqual(out.spendable, 5.7311);
+    });
+
+    // A stake genuinely leaves the wallet, so the spendable balance must fall
+    // with the chain instead of staying frozen at the ledger value.
+    await test('spendable follows the chain down when a stake is sent', async () => {
+        profilesStore[USER] = { chainGasOwed: 0 };
+        onChainBalance = '5.7311';
+        const before = await reconciler.getOnChainSpendable(USER, SESSION);
+        onChainBalance = '2.7311'; // 3 staked to treasury
+        const after = await reconciler.getOnChainSpendable(USER, SESSION);
+        assert.strictEqual(before.spendable, 5.7311);
+        assert.strictEqual(after.spendable, 2.7311, 'spendable must track the stake leaving');
+    });
+
+    await test('gas float larger than the balance floors at zero', async () => {
+        profilesStore[USER] = { chainGasOwed: 5 };
+        onChainBalance = '2';
+        const out = await reconciler.getOnChainSpendable(USER, SESSION);
+        assert.strictEqual(out.spendable, 0, 'must never go negative');
+    });
+
+    // An RPC outage must not be reported as a zero balance, which would look
+    // to the user like their money vanished.
+    await test('on-chain read returns null when the RPC is down', async () => {
+        profilesStore[USER] = { chainGasOwed: 0 };
+        rpcDown = true;
+        const out = await reconciler.getOnChainSpendable(USER, SESSION);
+        assert.strictEqual(out, null, 'a failed read must not report a balance');
+    });
+
+    // Regression: seedBaseline used to re-run on every /session/init. A second
+    // login raised the baseline to the full on-chain balance, which made a real
+    // deposit permanently unclaimable. It must refuse once a baseline exists.
+    await test('seeding never overwrites an existing baseline', async () => {
+        profilesStore[USER] = { chainBaseline: 5.7311, chainGasOwed: 0 };
+        onChainBalance = '32.010903';
+        const seeded = await reconciler.seedBaseline(USER, SESSION);
+        assert.strictEqual(seeded, false, 'a seeded baseline must be refused');
+        assert.strictEqual(profilesStore[USER].chainBaseline, 5.7311,
+            'the real deposit must not be hidden by a later login');
+    });
+
     console.log(`\n${passed} passing, ${failed} failing\n`);
     process.exit(failed > 0 ? 1 : 0);
 })();

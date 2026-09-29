@@ -130,9 +130,59 @@ function advanceBaselineForCreditedDeposit(userAddr, amount) {
 }
 
 /**
- * Seed the baseline without crediting anything. Safe to call repeatedly.
+ * Derive the user's spendable balance from the chain.
+ *
+ * The on-chain balance of the session EOA is the source of truth: it is the
+ * money that can actually be staked, and it moves correctly on its own when a
+ * stake is sent to the treasury or a win is settled back in. The one amount
+ * inside it that is NOT the user's is the platform's gas float, which
+ * _ensureSessionWalletFunded() pushes in before a trade. That debt is tracked
+ * in chain_gas_owed, so it is subtracted here rather than being handed out.
+ *
+ *     spendable = onChain - gasOwed
+ *
+ * Never returns a negative balance: if gas debt was recorded but the float has
+ * already been spent, the true spendable amount is zero, not a negative number
+ * that would corrupt the ledger.
  */
-async function seedBaseline(userAddr, sessionAddress) {
+function spendableFromChain(onChain, gasOwed) {
+    const spendable = parseFloat(onChain) - Number(gasOwed || 0);
+    return spendable > 0 ? Number(spendable.toFixed(6)) : 0;
+}
+
+/**
+ * Read the chain and return the balance the user may actually spend.
+ *
+ * This is the on-chain-anchored read used by the balance endpoint after a
+ * transaction. A failed read returns null so callers can keep showing the last
+ * known good value instead of flashing a false zero.
+ */
+async function getOnChainSpendable(userAddr, sessionAddress) {
+    const addr = String(userAddr).toLowerCase();
+    if (!sessionAddress) return null;
+    try {
+        const raw = await deps.rpc.tryGetBalance(sessionAddress);
+        if (raw == null) return null; // RPC unavailable — never report a fake 0
+        const onChain = parseFloat(raw);
+        if (!isFinite(onChain)) return null;
+        const { gasOwed } = readState(addr);
+        return { onChain, gasOwed, spendable: spendableFromChain(onChain, gasOwed) };
+    } catch (e) {
+        console.warn('[ChainReconciler] on-chain read failed:', e.message);
+        return null;
+    }
+}
+
+/**
+ * Seed the baseline without crediting anything. Safe to call repeatedly.
+ *
+ * Refuses to seed once a baseline exists. An earlier version re-ran this on
+ * every /session/init, which meant a single login could raise the baseline to
+ * the full on-chain balance and make a real deposit permanently unclaimable.
+ * A baseline is only ever established once, and never moved backwards by a
+ * login.
+ */
+async function seedBaseline(userAddr, sessionAddress, opts = {}) {
     const addr = String(userAddr).toLowerCase();
     const { baseline } = readState(addr);
     if (baseline != null) return false;
@@ -255,6 +305,8 @@ module.exports = {
     recordGasFunding,
     advanceBaselineForCreditedDeposit,
     seedBaseline,
+    getOnChainSpendable,
+    spendableFromChain,
     // Test seams. Not used by production code paths.
     __setDeps,
     __reset

@@ -728,6 +728,33 @@ app.get('/session/balance/:address', async (req, res) => {
     chainReconciler.reconcileSessionBalance(userAddr, sessionWallet.address)
         .catch((reconErr) => console.warn('[session/balance] reconcile skipped:', reconErr.message));
 
+    // ── On-chain is the source of truth ───────────────────────────────────
+    // The chain holds the money that can actually be staked, and it moves on
+    // its own when a stake is sent to the treasury or a win settles back in.
+    // Read it here so the number the user sees is the real one after every
+    // transaction, with the platform's gas float subtracted by the reconciler.
+    // Falls back to the last known good ledger value if the RPC is down, so a
+    // provider outage can never show a false 0.
+    const onChain = await chainReconciler.getOnChainSpendable(userAddr, sessionWallet.address);
+    if (onChain) {
+      const session = cache.sessions.get(userAddr);
+      if (session) {
+        session.balance = onChain.spendable;
+        if (profiles.get(userAddr)?.balance !== onChain.spendable) {
+          profiles.upsert(userAddr, { balance: onChain.spendable });
+        }
+      }
+      res.json({
+        success: true,
+        balance: String(onChain.spendable),
+        onChainBalance: String(onChain.onChain),
+        gasFloat: String(onChain.gasOwed),
+        sessionAddress: sessionWallet.address,
+        source: 'on-chain'
+      });
+      return;
+    }
+
     const finalSession = cache.sessions.get(userAddr);
     res.json({ 
       success: true, 
