@@ -458,13 +458,13 @@ export default function TradeHistoryTable({
               onClick={() => onShare?.(trade)}
               className={`inline-flex items-center gap-4 cursor-pointer shrink-0 border-r ${isLight ? 'border-[#E9E9E9]' : 'border-white/10'} pr-6`}
             >
-              <span className={`text-[36px] font-black tracking-tighter ${isLight ? 'text-[#111827]' : 'text-white'}`}>
-                {trade.symbol}
+              <span className={`text-[36px] font-black tracking-tighter uppercase ${isLight ? 'text-[#111827]' : 'text-white'}`}>
+                {String(trade.symbol || '').toUpperCase()}
               </span>
               <div className="flex flex-col gap-1 justify-center">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-h-5">
                   <span className="inline-flex items-center gap-1">
-                    <span className={`text-[11px] font-bold ${isLight ? 'text-gray-500' : 'text-white/40'}`}>Pos:</span>
+                    <span className={`text-[11px] font-bold leading-none ${isLight ? 'text-gray-500' : 'text-white/40'}`}>Pos:</span>
                     <span className={`text-[12px] font-black ${trade.direction === 'UP' ? 'text-[#17A364]' : 'text-[#EF5350]'}`}>
                       {trade.direction === 'UP' ? 'YES' : 'NO'}
                     </span>
@@ -478,15 +478,15 @@ export default function TradeHistoryTable({
                   </span>
                   <button
                     onClick={(e) => { e.stopPropagation(); onShare?.(trade); }}
-                    className={`inline-flex items-center justify-center w-5 h-5 rounded-full ${isLight ? 'text-[#249C6C] hover:bg-[#249C6C]/10' : 'text-[#17A364] hover:bg-[#17A364]/10'}`}
+                    className={`inline-flex items-center justify-center w-5 h-5 shrink-0 rounded-full ${isLight ? 'text-[#249C6C] hover:bg-[#249C6C]/10' : 'text-[#17A364] hover:bg-[#17A364]/10'}`}
                     title="Share Card"
                   >
                     <Share2 size={12} />
                   </button>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-h-5">
                   <span className="inline-flex items-center gap-1">
-                    <span className={`text-[11px] font-bold ${isLight ? 'text-gray-500' : 'text-white/40'}`}>Out:</span>
+                    <span className={`text-[11px] font-bold leading-none ${isLight ? 'text-gray-500' : 'text-white/40'}`}>Out:</span>
                     {isActive ? (
                       <span className="text-[12px] font-black text-yellow-500 animate-pulse">PENDING</span>
                     ) : (
@@ -507,7 +507,7 @@ export default function TradeHistoryTable({
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className={`inline-flex items-center justify-center w-5 h-5 rounded-full ${isLight ? 'text-[#249C6C] hover:bg-[#249C6C]/10' : 'text-[#17A364] hover:bg-[#17A364]/10'}`}
+                          className={`inline-flex items-center justify-center w-5 h-5 shrink-0 rounded-full ${isLight ? 'text-[#249C6C] hover:bg-[#249C6C]/10' : 'text-[#17A364] hover:bg-[#17A364]/10'}`}
                           title="View on ArcScan"
                         >
                           <ExternalLink size={12} />
