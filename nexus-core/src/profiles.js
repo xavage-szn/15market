@@ -31,7 +31,13 @@ function supabaseHeaders() {
 }
 
 const supabaseRequest = async (path, options = {}) => {
-    const { timeout = 8000, ...fetchOptions } = options;
+    // Supabase is cross-region from Render and measured ~8.4s for a bare
+// reachability check, so the previous 8s default sat right on the edge: profile
+// loads aborted mid-flight and silently degraded to the local file fallback. On
+// Render's ephemeral disk that fallback is effectively an empty profile store,
+// which loses onboarding state, the chain baseline and the persisted balance.
+// Durability beats speed here, so allow a slow-but-valid response to land.
+const { timeout = 25000, ...fetchOptions } = options;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     try {
