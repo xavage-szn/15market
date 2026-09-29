@@ -244,6 +244,7 @@ class ProfileService {
         this.sbColumnsProbed = false;
         this.sbTradeTableAvailable = null;
         this.sbIdempotencyAvailable = null; // null = unprobed, false = table missing
+    this.sbBetIdempotencyAvailable = null; // same, for placed_bets (005)
         this.sbInitPromise = null;
         this.sbLoggedDisabled = false;
 
@@ -271,6 +272,7 @@ class ProfileService {
             await this.probeSupabaseColumns();
             await this.probeSupabaseTradeTable();
             await this.probeSupabaseIdempotencyTable();
+            await this.probeSupabaseBetIdempotencyTable();
             if (this.sbTradeTableAvailable === null) {
                 // Transient probe failure. Drop the memo so the next caller
                 // retries instead of running degraded for the whole process.
@@ -384,6 +386,144 @@ class ProfileService {
             // the next attempt should retry rather than fail forever.
             console.error('[Idempotency] claimDeposit error, deposit NOT credited:', e.message);
             return { claimed: false, reason: 'unavailable' };
+        }
+    }
+
+    /**
+     * Claim a bet id before broadcasting placeBet.
+     *
+     * Mirrors claimDeposit: the PRIMARY KEY on placed_bets IS the idempotency
+     * key, so the insert is the lock. Whoever inserts first gets to place the
+     * bet; every replay gets a 23505 conflict and must do nothing.
+     *
+     * Fails CLOSED. If the claim cannot be made we cannot prove the bet is not a
+     * replay, and placing it anyway risks a duplicate on-chain stake and a
+     * second balance deduction - a direct house loss. Refusing is the safe
+     * failure; the user retries and a healthy claim succeeds.
+     *
+     * @returns {Promise<{claimed: boolean, reason?: string}>}
+     */
+    async claimBet(betId, userAddress, amount, details = {}) {
+        const id = String(betId || '');
+        if (!id) return { claimed: false, reason: 'missing-bet-id' };
+        if (!SUPABASE_ENABLED) {
+            return { claimed: false, reason: 'supabase-disabled' };
+        }
+        if (this.sbBetIdempotencyAvailable === false) {
+            return { claimed: false, reason: 'table-missing' };
+        }
+        const user = String(userAddress || '').toLowerCase();
+        try {
+            // NOTE: do NOT add `resolution=ignore-duplicates` here. PostgREST
+            // then swallows the 23505 unique violation and answers 201, which we
+            // would read as "we own the bet id" - silently passing every replay
+            // straight through to a second on-chain placeBet. Without it, the
+            // PK conflict surfaces as 409, which is the signal we need.
+            const res = await supabaseRequest('/rest/v1/placed_bets', {
+                method: 'POST',
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    bet_id: id,
+                    user_address: user,
+                    amount: Number(amount || 0),
+                    symbol: details.symbol || null,
+                    duration: details.duration ?? null,
+                    status: 'PENDING'
+                })
+            });
+
+            // 201 = we inserted and now own the placeBet.
+            if (res.status === 201) {
+                this.sbBetIdempotencyAvailable = true;
+                return { claimed: true };
+            }
+            // 409 = this bet id already exists, so this submit is a replay.
+            if (res.status === 409) {
+                this.sbBetIdempotencyAvailable = true;
+                // The bet id is a global key. If the existing claim belongs to a
+                // different wallet this is an id collision, not a retry, and we
+                // must not hand that wallet's trade back to this caller.
+                const owner = await this.betIdOwner(id);
+                if (owner && owner !== user) {
+                    console.error(`[Idempotency] #${id} already claimed by a different wallet. Refusing.`);
+                    return { claimed: false, reason: 'id-collision' };
+                }
+                return { claimed: false, reason: 'already-placed' };
+            }
+
+            const text = await res.text().catch(() => '');
+            if (res.status === 400 || res.status === 404 || res.status === 401 || res.status === 403) {
+                if (res.status === 404) this.sbBetIdempotencyAvailable = false;
+                console.error(`[Idempotency] claimBet rejected (${res.status}): ${text.slice(0, 200)}`);
+                return { claimed: false, reason: this.sbBetIdempotencyAvailable === false ? 'table-missing' : 'rejected' };
+            }
+
+            throw new Error(`claimBet failed (${res.status}): ${text.slice(0, 200)}`);
+        } catch (e) {
+            // Network blip / timeout. Do NOT latch: the next attempt should retry.
+            // Still fail closed - we cannot prove this is not a replay.
+            console.error('[Idempotency] claimBet error, bet NOT placed:', e.message);
+            return { claimed: false, reason: 'unavailable' };
+        }
+    }
+
+    // Owner of an existing bet id, or null if unknown. Used only to tell our own
+    // replay apart from an id collision with another wallet.
+    async betIdOwner(betId) {
+        try {
+            const res = await supabaseRequest(
+                `/rest/v1/placed_bets?bet_id=eq.${encodeURIComponent(betId)}&select=user_address&limit=1`,
+                { timeout: 10000 }
+            );
+            if (!res.ok) return null;
+            const rows = await res.json();
+            const addr = rows?.[0]?.user_address;
+            return addr ? String(addr).toLowerCase() : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    // Record the tx hash once broadcast succeeds, and mark the final status.
+    // Failure here is logged, never thrown: the claim already guarantees the
+    // bet cannot be replayed, so this row is audit data, not the lock.
+    async recordBetResult(betId, patch = {}) {
+        const id = String(betId || '');
+        if (!id || !SUPABASE_ENABLED) return;
+        try {
+            const body = {};
+            for (const [k, v] of Object.entries(patch)) {
+                if (v !== undefined && v !== null) body[k] = v;
+            }
+            if (!Object.keys(body).length) return;
+            await supabaseRequest(`/rest/v1/placed_bets?bet_id=eq.${encodeURIComponent(id)}`, {
+                method: 'PATCH',
+                timeout: 10000,
+                headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+                body: JSON.stringify(body)
+            });
+        } catch (e) {
+            console.warn(`[Idempotency] recordBetResult failed for #${id}: ${e.message}`);
+        }
+    }
+
+    async probeSupabaseBetIdempotencyTable() {
+        if (!SUPABASE_ENABLED || this.sbBetIdempotencyAvailable !== null) return;
+        try {
+            const res = await supabaseRequest('/rest/v1/placed_bets?select=bet_id&limit=1', { timeout: 20000 });
+            this.sbBetIdempotencyAvailable = res.ok;
+            if (!res.ok) {
+                console.error('[Idempotency] placed_bets table unavailable — apply supabase/migrations/005_trade_idempotency.sql. Trades will be REFUSED (not duplicated) until then.');
+            } else {
+                console.log('[Idempotency] placed_bets table ready — bet submits are durably idempotent.');
+            }
+        } catch (e) {
+            this.sbBetIdempotencyAvailable = false;
+            console.error('[Idempotency] placed_bets probe failed:', e.message);
         }
     }
 

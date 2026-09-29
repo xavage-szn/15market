@@ -204,6 +204,12 @@ class ClassicEngine {
         trade.status = 'LOST';
         this.settleTradeLocally(trade);
       }
+      // Keep the idempotency ledger in step with the settlement so an operator
+      // reconciling balances can see the bet is closed, not stuck.
+      profiles.recordBetResult(trade.id, {
+        status: trade.status,
+        settled_at: new Date().toISOString()
+      });
     } catch (err) {
       // NEVER leave the client hanging in RESOLVING with no backend error.
       console.error(`[Engine] lockResult ERROR for #${trade.id}:`, err?.message || err);
@@ -253,12 +259,52 @@ class ClassicEngine {
   }
 
   // ── INSTANT WINNER CREDIT ──────────────────────────────────────────────
+  // Maximum net payout for a stake, derived from the published duration
+  // multipliers in config.MULTIPLIERS.
+  //
+  // creditWinner used to compute `amount / sharePrice` with no ceiling. A trade
+  // is only worth the multiplier, but a sharePrice near the 0.03 clamp floor
+  // turns a 3.95 USDC stake into a ~97 USDC payout - 13x the 1.90x ceiling for
+  // a 15s trade. That is a direct house-loss, so the payout is now capped at
+  // stake * multiplier * 0.99 regardless of what the odds engine reports.
+  // Nearest configured duration tier, so an odd duration cannot fall through
+  // uncapped. Falls back to the 15s tier, the most conservative.
+  multiplierFor(duration) {
+    const tiers = Object.keys(config.MULTIPLIERS)
+      .map(Number)
+      .filter((d) => isFinite(d))
+      .sort((a, b) => a - b);
+    if (!tiers.length) return 1.90;
+    const d = Number(duration);
+    const tier = tiers.reduce((best, t) => (
+      Math.abs(t - d) < Math.abs(best - d) ? t : best
+    ), tiers[0]);
+    return config.MULTIPLIERS[tier] || 1.90;
+  }
+
+  maxPayoutFor(trade) {
+    return Number(trade?.amount || 0) * this.multiplierFor(trade?.duration) * 0.99;
+  }
+
   creditWinner(trade, exitPrice) {
+    // Same guard as settleTradeLocally: a win must be credited exactly once.
+    if (trade.status === 'WON' || trade.payoutAmount) {
+      console.warn(`[Engine] #${trade.id} duplicate win credit ignored (already WON).`);
+      return;
+    }
     const sharePrice = Math.max(0.03, Math.min(0.97, Number(trade.sharePrice) || 0.50));
     const grossPayout = trade.amount / sharePrice;
-    const netPayout = grossPayout * 0.99;
-    const payoutAmount = Math.max(0.000001, netPayout);
+    const uncappedNet = grossPayout * 0.99;
+    const cap = this.maxPayoutFor(trade);
+    const payoutAmount = Math.max(0.000001, Math.min(uncappedNet, cap));
     const payoutStr = payoutAmount.toFixed(6);
+
+    if (uncappedNet > cap + 0.000001) {
+      console.error(
+        `[Engine] #${trade.id} PAYOUT CAPPED: sharePrice=${sharePrice} would pay ${uncappedNet.toFixed(6)} ` +
+        `but ${trade.duration}s stake ${trade.amount} caps at ${cap.toFixed(6)}. Odds engine out of range.`
+      );
+    }
 
     let exitPriceBigInt;
     try { exitPriceBigInt = ethers.parseUnits(Number(exitPrice).toFixed(8), 8); }
@@ -445,6 +491,26 @@ class ClassicEngine {
     this._tradeLocks.add(userAddr);
 
     try {
+      // IDEMPOTENCY, LAYER 1 (in-process): rejects an instant replay cheaply.
+      // The frontend generates the betId, and a double-click or a socket replay
+      // resends it. cache.trades is in-memory, so this layer only helps within a
+      // process lifetime - layer 2 below is the durable one.
+      const incomingId = tradeParams?.id ? String(tradeParams.id) : null;
+      if (incomingId) {
+        const existing = cache.trades.get(incomingId);
+        if (existing) {
+          console.warn(`[Place] #${incomingId} duplicate submit ignored (already placed for ${userAddr}).`);
+          return {
+            success: true,
+            duplicate: true,
+            tradeId: existing.id,
+            txHash: existing.stakeTxHash || null,
+            amount: existing.amount,
+            status: existing.status
+          };
+        }
+      }
+
       return await this._placeTradeInner(tradeParams, identityPayload, userAddr, sessionWallet);
     } finally {
       this._tradeLocks.delete(userAddr);
@@ -465,6 +531,10 @@ class ClassicEngine {
     let generatedId = Date.now().toString() + crypto.randomInt(100000, 999999).toString();
     const rawId = tradeParams.id && /^\d+$/.test(String(tradeParams.id)) ? String(tradeParams.id) : generatedId;
     const numericId = BigInt(rawId);
+
+    // IDEMPOTENCY, LAYER 2 (durable): the bet id is claimed in Postgres further
+    // down, immediately before the on-chain broadcast, so that a validation
+    // failure above does not burn the user's id.
 
     const direction = this.resolveDirection(tradeParams.direction);
     if (direction === null) {
@@ -516,11 +586,56 @@ class ClassicEngine {
       return { success: false, error: 'Insufficient balance' };
     }
 
+    // ── IDEMPOTENCY GATE ────────────────────────────────────────────────
+    // Claimed here, as late as possible: every validation above has passed and
+    // the next statement is the first irreversible side effect. cache.trades and
+    // _tradeLocks are in-process and lost on restart, so without a durable claim
+    // a replay after a deploy broadcasts a second real placeBet.
+    //
+    // Fails closed. If we cannot prove the bet is not a replay we must not place
+    // it, because a duplicate costs the house real money.
+    const claim = await profiles.claimBet(rawId, userAddr, amount, {
+      duration,
+      symbol,
+      direction,
+      marketId,
+      sharePrice
+    });
+    if (!claim.claimed) {
+      if (claim.reason === 'already-placed') {
+        // Replay of a bet id we already accepted. Return the original outcome so
+        // the client converges on one trade instead of showing a second one.
+        const prior = cache.trades.get(rawId);
+        console.warn(`[Place] #${rawId} replay rejected: bet id already placed.`);
+        return {
+          success: true,
+          duplicate: true,
+          tradeId: rawId,
+          txHash: prior?.stakeTxHash || null,
+          amount: prior?.amount ?? amount,
+          status: prior?.status || 'PENDING'
+        };
+      }
+      console.error(`[Place] #${rawId} REFUSED (claim failed: ${claim.reason}). Apply supabase/migrations/005_trade_idempotency.sql.`);
+      return { success: false, error: 'Trade could not be verified as unique. Please try again.' };
+    }
+
     // ── SEND ON-CHAIN FIRST ──────────────────────────────────────────────
     let realHash;
     try {
       // Ensure session wallet has native ARC for gas + stake
       await this._ensureSessionWalletFunded(sessionWallet, stakeWei, userAddr);
+
+      // Re-check the balance under the same conditions we will deduct in.
+      // _ensureSessionWalletFunded awaits, so a concurrent trade could have spent
+      // the balance since the check above.
+      const freshSession = cache.sessions.get(userAddr);
+      if (!freshSession || freshSession.balance < amount) {
+        console.warn(`[Place] #${numericId} balance moved during placement, aborting before broadcast.`);
+        // We own the claim and nothing hit the chain, so release it.
+        profiles.recordBetResult(rawId, { status: 'CANCELLED', settled_at: new Date().toISOString() });
+        return { success: false, error: 'Insufficient balance' };
+      }
 
       const data = this.contractInterface.encodeFunctionData('placeBet', [
         numericId, contractDir, duration, contractPrice, marketId, sessionWallet.address
@@ -544,6 +659,8 @@ class ClassicEngine {
       console.log(`[Place] #${numericId} broadcasted | Tx: ${realHash}`);
     } catch (err) {
       console.error(`[Place] #${numericId} broadcast failed:`, err.message?.substring(0, 150));
+      // Nothing reached the chain, so release the claim or this id is burned.
+      profiles.recordBetResult(rawId, { status: 'CANCELLED', settled_at: new Date().toISOString() });
       return { success: false, error: `Trade broadcast failed: ${err.message?.substring(0, 100)}` };
     }
 
@@ -571,6 +688,8 @@ class ClassicEngine {
     };
     cache.trades.set(trade.id, trade);
     await cache.pushHistory(userAddr, trade);
+    // Attach the tx hash to the claim row for audit and reconciler lookups.
+    profiles.recordBetResult(trade.id, { stake_tx_hash: realHash, symbol });
 
     this.io.to(userAddr).emit('balance_update', {
       balance: String(session.balance),
@@ -591,6 +710,9 @@ class ClassicEngine {
           settledAt: Date.now(),
           cancelledAt: Date.now()
         });
+        // Mark the claim cancelled too, so the ledger agrees with the revert and
+        // an operator can see the bet was never really live.
+        profiles.recordBetResult(trade.id, { status: 'CANCELLED', settled_at: new Date().toISOString() });
         const sess = cache.sessions.get(userAddr);
         if (sess) {
           sess.balance = Number(Math.max(0, sess.balance + amount).toFixed(6));
@@ -616,6 +738,13 @@ class ClassicEngine {
   }
 
   settleTradeLocally(trade) {
+    // Guard against a double settle re-crediting. The payout cap bounds the size
+    // of any single overpay, but a repeated credit is the same house loss twice,
+    // so refuse rather than stack it.
+    if (trade.settledAt || trade.status === 'LOST' || trade.status === 'WON') {
+      console.warn(`[Engine] #${trade.id} duplicate settle ignored (already ${trade.status}).`);
+      return;
+    }
     trade.status = 'LOST';
     trade.settledAt = Date.now();
 
@@ -676,7 +805,18 @@ class ClassicEngine {
           if (ct.providerTradeId === providerTradeId && ct.result === 'PENDING') {
             updated = true;
             const ratio = providerTrade.amount > 0 ? (payout / providerTrade.amount) : 0;
-            const payoutAmount = won ? (ct.amount * ratio) : 0;
+            // Cap the copier's payout with the same duration multiplier the
+            // provider was paid on. copyTrades carry their own amount and no
+            // duration, so borrow the provider's; an uncapped ratio inherits the
+            // provider's overpay and pays the copier too.
+            const copyCap = Number(ct.amount || 0) * this.multiplierFor(providerTrade.duration) * 0.99;
+            const rawCopy = won ? (ct.amount * ratio) : 0;
+            const payoutAmount = won ? Math.min(rawCopy, copyCap) : 0;
+            if (won && rawCopy > copyCap + 0.000001) {
+              console.error(
+                `[Engine] #${providerTradeId} COPY PAYOUT CAPPED: would pay ${rawCopy.toFixed(6)} but caps at ${copyCap.toFixed(6)}.`
+              );
+            }
             settledTrade = { ...ct, result: won ? 'WON' : 'LOST', payout: payoutAmount, settledAt: Date.now() };
             return settledTrade;
           }

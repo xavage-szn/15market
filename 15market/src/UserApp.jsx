@@ -810,6 +810,20 @@ const performStealthChecks = useCallback(async (addr) => {
     setToast({ id: Date.now() + Math.random(), message, type, onClick });
   }, []);
 
+  // Synchronous submit lock for executeTrade. isExecuting is React state, so
+  // within one tick it still holds the previous value: two clicks in the same
+  // tick both read false and both fire, sending two /session/execute calls with
+  // two distinct bet ids. That is how a phantom bet got placed next to the real
+  // one. A ref updates immediately, so it is the actual guard.
+  const executeLockRef = useRef(false);
+
+  // A submit whose HTTP response never arrived. The backend may still have
+  // broadcast it, so we must not let the user fire a NEW bet id: that is a
+  // second real stake. While this is set, new submits are refused and we poll
+  // the read-only history endpoint until the bet's fate is known.
+  const unresolvedSubmitRef = useRef(null);
+  const unresolvedWatchRef = useRef(false);
+
   // Tapping a trade always opens the card. An unsettled trade shows a PENDING
   // card with a "check back later" disclaimer rather than being blocked, so
   // the user can see the stake and trade id while it is still live.
@@ -1534,11 +1548,23 @@ const performStealthChecks = useCallback(async (addr) => {
     const activeType = params?.type || (gameMode === 'rounds' ? 'rounds' : 'classic');
     const isRounds = activeType === 'round' || activeType === 'rounds';
 
-    // Block double-submission for both rounds and classic
-    if (isExecuting) return;
+    // Block double-submission for both rounds and classic. The ref is the real
+    // guard; isExecuting is kept only to drive the button's disabled styling.
+    if (isExecuting || executeLockRef.current) return;
+    // A previous submit timed out. Its outcome is still unknown, so placing a
+    // new bet id here would risk a second real stake. Wait for the watcher.
+    if (unresolvedSubmitRef.current) {
+      return notify("Still confirming your previous trade. One moment...", "error");
+    }
+    executeLockRef.current = true;
+
+    // Every one of these validations returns before the trade is actually sent,
+    // so each must hand the submit lock back or the user is locked out of
+    // trading for the rest of the session.
+    const bail = (fn) => { executeLockRef.current = false; return fn; };
 
     if (platformSettings.tradingHalted) {
-      return notify("TRADING HALTED BY ADMIN - Operations Paused", "error");
+      return bail(() => notify("TRADING HALTED BY ADMIN - Operations Paused", "error"));
     }
 
     const activeDirection = params?.direction || direction;
@@ -1547,31 +1573,31 @@ const performStealthChecks = useCallback(async (addr) => {
 
     let activePrice = parseFloat(price);
     if (!activePrice || activePrice <= 0) {
-      return notify("Waiting for price feed sync...", "error");
+      return bail(() => notify("Waiting for price feed sync...", "error"));
     }
-    if (!activeDirection) return notify("Select UP or DOWN first", "error");
-    if (!activeAmount || parseFloat(activeAmount) <= 0) return notify("Enter a valid amount", "error");
+    if (!activeDirection) return bail(() => notify("Select UP or DOWN first", "error"));
+    if (!activeAmount || parseFloat(activeAmount) <= 0) return bail(() => notify("Enter a valid amount", "error"));
 
     // For the embedded session model, the stake comes from the session wallet balance.
     const currentBal = sessionBalance;
     const sanitizedAmount = (activeAmount || "0").toString().replace(',', '.');
     const stakeAmt = parseFloat(sanitizedAmount);
     if (isNaN(stakeAmt) || stakeAmt <= 0) {
-      return notify("Invalid trade amount", "error");
+      return bail(() => notify("Invalid trade amount", "error"));
     }
 
     // Reserve a tiny margin for gas (USDC is gas on Arc)
     const gasMargin = 0.001;
 
     if (stakeAmt + gasMargin > currentBal) {
-      return notify(`Insufficient Session Balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC. Please Deposit.`, "error");
+      return bail(() => notify(`Insufficient Session Balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC. Please Deposit.`, "error"));
     }
     // #region agent log
     postDebugLog({ runId: 'initial', hypothesisId: 'H2', location: 'UserApp.jsx:executeTrade:validated', message: 'trade validated pre-submit', data: { probeId, activeType, stakeAmt, currentBal, gasMargin, activeDirection, activeDuration } });
     // #endregion
 
     if (Number(activeAmount) < parseFloat(platformSettings.minBet) && activeType !== 'rounds') {
-      return notify(`Min trade: ${platformSettings.minBet} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
+      return bail(() => notify(`Min trade: ${platformSettings.minBet} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error"));
     }
 
     // Ensure active expansion pane is controlled if necessary
@@ -1585,7 +1611,7 @@ const performStealthChecks = useCallback(async (addr) => {
     const assetId = ASSET_ID_MAP[activeMarket?.id?.toLowerCase()] || 0;
     // Guard against NaN: if activePrice is invalid, abort early
     if (isNaN(activePrice) || activePrice <= 0) {
-      return notify("Price feed not ready. Please wait.", "error");
+      return bail(() => notify("Price feed not ready. Please wait.", "error"));
     }
     const entryPriceParams = (assetId === 2) ? Math.floor(activePrice * 1000000) : Math.floor(activePrice * 100);
     const activeUserAddr = (sessionMode && evmSessionWallet) ? evmSessionWallet.address : address;
@@ -1654,6 +1680,7 @@ const performStealthChecks = useCallback(async (addr) => {
         setTradeHistory(prev => dedupeAndAdd(prev, roundTrade));
         setRoundsTradeHistory(prev => dedupeAndAdd(prev, roundTrade));
         setIsExecuting(false); // RELEASE BLOCK IMMEDIATELY for burst mode
+        executeLockRef.current = false; // HTTP call is done; a new click may start
 
         // Background Confirmation
         publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 }).then((receipt) => {
@@ -1746,6 +1773,7 @@ const performStealthChecks = useCallback(async (addr) => {
             setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
             setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
             setIsExecuting(false);
+            executeLockRef.current = false;
             return;
           }
 
@@ -1766,6 +1794,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
           notify('Trade Active ✓', 'success');
           setIsExecuting(false);
+          executeLockRef.current = false;
 
           // Re-pull both balances from source of truth so every device
           // (desktop/mobile) converges on the same numbers after this trade.
@@ -1781,9 +1810,21 @@ const performStealthChecks = useCallback(async (addr) => {
             setSessionBalance(prev => prev + amtNum);
             setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
             setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
+            setIsExecuting(false);
+            executeLockRef.current = false;
+            notify(err.message, 'error');
+            return;
           }
-          notify(err.name === 'AbortError' ? '⏳ Trade processing — balance will sync when confirmed' : err.message, 'error');
+
+          // Timeout: the bet id may or may not have reached the chain. Release
+          // neither the optimistic row nor the balance, and KEEP the submit lock
+          // so the user cannot fire a different bet id and stake twice. The
+          // watcher below frees the lock once the backend's history proves
+          // whether this bet exists.
+          unresolvedSubmitRef.current = { tradeId, amount: amtNum, at: Date.now() };
+          watchUnresolvedSubmit(address, tradeId);
           setIsExecuting(false);
+          notify('⏳ Trade processing — confirming on-chain. Trading locked until it resolves.', 'error');
         }
       };
 
@@ -1792,8 +1833,47 @@ const performStealthChecks = useCallback(async (addr) => {
     } catch (err) {
       notify(err.message, "error");
       setIsExecuting(false);
+      executeLockRef.current = false;
     }
   };
+
+  // Watches a timed-out submit until the backend's history proves it either
+  // exists (it went on-chain) or never appeared (safe to trade again). Read-only
+  // and self-stopping; the surrounding reconciler owns any balance repair.
+  const watchUnresolvedSubmit = useCallback(async (userAddr, betId) => {
+    if (unresolvedWatchRef.current) return;
+    unresolvedWatchRef.current = true;
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 90000;
+    const POLL_MS = 3000;
+    try {
+      while (Date.now() - startedAt < MAX_WAIT_MS) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        let rows = [];
+        try {
+          const res = await fetch(`${KEEPER_URL_ARC}/history/${userAddr}`);
+          if (res.ok) {
+            const data = await res.json();
+            rows = Array.isArray(data) ? data : (data?.trades || []);
+          }
+        } catch (_) { /* backend still down; keep waiting */ }
+
+        const found = rows.some((t) => String(t.id ?? t.betId ?? t.bet_id) === String(betId));
+        if (found) {
+          // It is on-chain. The normal history reconciler adopts the real verdict.
+          notify('Trade confirmed on-chain ✓', 'success');
+          break;
+        }
+      }
+    } finally {
+      // Either way the id is resolved: the reconciler owns the final status and
+      // any balance correction, so it is safe to let the user trade again.
+      unresolvedSubmitRef.current = null;
+      unresolvedWatchRef.current = false;
+      executeLockRef.current = false;
+      setIsExecuting(false);
+    }
+  }, [notify]);
 
 
   // Fetch and Index Trade History — AUTHORITATIVE reconciliation.

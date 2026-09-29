@@ -1081,6 +1081,18 @@ app.post('/session/execute', async (req, res) => {
     // SYNCHRONOUS COPY TRADE EXECUTION — same request, same block as provider trade
     // Executes immediately so investor activity is event-driven with zero latency
     const copyTradeResults = [];
+    // A duplicate is a replay of a bet id that is already live. It produced no
+    // new on-chain stake, so every downstream side effect must be skipped or the
+    // replay debits every copier a second time for a bet that never happened.
+    if (result.duplicate) {
+      console.warn(`[Execute] Bet #${result.tradeId} is a replay; skipping copy-trade fan-out.`);
+      return res.json({
+        tradeId: result.tradeId,
+        txHash: result.txHash || null,
+        duplicate: true,
+        status: result.status || 'PENDING'
+      });
+    }
     if (result.success && result.tradeId) {
       const providerAddr = address.toLowerCase();
       const providerProfile = profiles.get(providerAddr);
