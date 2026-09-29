@@ -174,6 +174,40 @@ async function getOnChainSpendable(userAddr, sessionAddress) {
 }
 
 /**
+ * Has the reconciler already absorbed the current on-chain state?
+ *
+ * After crediting a delta, reconcileSessionBalance sets baseline = onChain. So
+ * once the baseline has caught up to the live chain, every transfer inside that
+ * balance has already been counted into the user's balance.
+ *
+ * This closes a double-credit hole: the reconciler credits an aggregate delta
+ * with no tx hash, so it never writes a credited_deposits claim. A user who
+ * transfers on-chain and *then* calls /fund/confirm for the same tx would claim
+ * it fresh and be credited twice.
+ *
+ * Returns null when it genuinely cannot tell (no baseline seeded yet, or the RPC
+ * is unavailable) so the caller can fall back to its own accounting. Never
+ * guesses false on an RPC error — that would re-open the double credit.
+ */
+async function isOnChainStateAbsorbed(userAddr, sessionAddress) {
+    const addr = String(userAddr || '').toLowerCase();
+    if (!sessionAddress) return null;
+    const { baseline } = readState(addr);
+    if (baseline == null) return null;
+    try {
+        const raw = await deps.rpc.tryGetBalance(sessionAddress);
+        if (raw == null) return null;
+        const onChain = parseFloat(raw);
+        if (!isFinite(onChain)) return null;
+        const delta = onChain - baseline;
+        return { absorbed: delta <= DEPOSIT_EPSILON, onChain, baseline, delta };
+    } catch (e) {
+        console.warn('[ChainReconciler] absorbed check failed:', e.message);
+        return null;
+    }
+}
+
+/**
  * Seed the baseline without crediting anything. Safe to call repeatedly.
  *
  * Refuses to seed once a baseline exists. An earlier version re-ran this on
@@ -307,6 +341,7 @@ module.exports = {
     seedBaseline,
     getOnChainSpendable,
     spendableFromChain,
+    isOnChainStateAbsorbed,
     // Test seams. Not used by production code paths.
     __setDeps,
     __reset

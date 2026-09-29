@@ -1357,8 +1357,10 @@ app.post('/session/deposit', async (req, res) => {
 
     // ── 2. On-chain verification ──────────────────────────────────────────
     let creditedAmount = requestedAmount;
+    // Declared out here, not inside the `if (txHash)` block: the idempotency
+    // check below also needs the session wallet to read the on-chain state.
+    const sessionWallet = deriveSessionWallet(userAddr);
     if (txHash) {
-      const sessionWallet = deriveSessionWallet(userAddr);
       // Short poll: this runs inside an HTTP request. The client retries and
       // the on-chain reconciler is the backstop if it is still pending.
       const receipt = await rpc.waitForReceipt(txHash, 4, 1500);
@@ -1399,6 +1401,24 @@ app.post('/session/deposit', async (req, res) => {
     }
 
     // ── 3. Idempotency: never credit the same transfer twice ──────────────
+    // The reconciler credits aggregate on-chain deltas with no tx hash, so it
+    // never writes a claim. If it already absorbed this transfer (a user who
+    // sent USDC directly, then called /fund/confirm for the same tx), claiming
+    // here would land on a fresh row and credit the funds a second time.
+    // Detect that, record the claim so replays stay blocked, and return the
+    // already-correct balance instead of adding to it again.
+    const absorbed = await chainReconciler.isOnChainStateAbsorbed(userAddr, sessionWallet.address);
+    if (absorbed && absorbed.absorbed) {
+        await profiles.claimDeposit(txHash, userAddr, creditedAmount, 'reconciled-already');
+        let currentBalance = 0;
+        try {
+            const s = cache.sessions.get(userAddr);
+            currentBalance = s ? Number(s.balance || 0) : Number((profiles.get(userAddr) || {}).balance || 0);
+        } catch (e) { }
+        console.log(`[Deposit] ${txHash} already absorbed by reconciler (on-chain ${absorbed.onChain}, baseline ${absorbed.baseline}) — not crediting again`);
+        return res.json({ success: true, balance: currentBalance, credited: 0, alreadyReconciled: true });
+    }
+
     // The claim is a durable INSERT on credited_deposits.tx_hash (PRIMARY KEY).
     // It replaces the old in-process Set, which was lost on every restart and
     // so allowed a replay inside the 1h signature window to credit twice.
@@ -1426,7 +1446,6 @@ app.post('/session/deposit', async (req, res) => {
     if (session) {
       session.balance = newBalance;
     } else {
-      const sessionWallet = deriveSessionWallet(userAddr);
       session = cache.getOrCreateSession(userAddr, {
         identityKey: userAddr,
         walletAddress: userAddr,

@@ -331,6 +331,54 @@ async function test(name, fn) {
             'the real deposit must not be hidden by a later login');
     });
 
+    // ── isOnChainStateAbsorbed ───────────────────────────────────────────
+    // Guards the double credit where the reconciler absorbs a direct on-chain
+    // transfer (no tx hash, so no claim row) and /fund/confirm then claims the
+    // same tx fresh and credits it a second time.
+    await test('absorbed is true once the baseline has caught up', async () => {
+        profilesStore[USER] = { chainBaseline: 12, chainGasOwed: 0 };
+        onChainBalance = '12';
+        const out = await reconciler.isOnChainStateAbsorbed(USER, SESSION);
+        assert.strictEqual(out.absorbed, true, 'chain already credited up to the baseline');
+    });
+
+    await test('absorbed is false while a deposit delta is still uncredited', async () => {
+        profilesStore[USER] = { chainBaseline: 2, chainGasOwed: 0 };
+        onChainBalance = '12'; // +10 sitting on-chain, not yet credited
+        const out = await reconciler.isOnChainStateAbsorbed(USER, SESSION);
+        assert.strictEqual(out.absorbed, false, 'an uncredited delta must not be called absorbed');
+        assert.strictEqual(out.delta, 10, 'delta is reported for the caller');
+    });
+
+    // The dangerous default: if this returned false while the RPC is down,
+    // /fund/confirm would credit a transfer the reconciler may already have
+    // credited. Returning null forces the caller onto its own claim path.
+    await test('absorbed returns null when the RPC is down, never false', async () => {
+        profilesStore[USER] = { chainBaseline: 12, chainGasOwed: 0 };
+        rpcDown = true;
+        const out = await reconciler.isOnChainStateAbsorbed(USER, SESSION);
+        assert.strictEqual(out, null, 'an unreadable chain must not be reported as not-absorbed');
+    });
+
+    await test('absorbed returns null before a baseline exists', async () => {
+        onChainBalance = '12';
+        const out = await reconciler.isOnChainStateAbsorbed(USER, SESSION);
+        assert.strictEqual(out, null, 'with no baseline there is nothing to compare');
+    });
+
+    // End-to-end shape of the hole: reconciler credits, then the confirm check
+    // must see the state as absorbed so it does not credit again.
+    await test('reconciler credit makes the same transfer read as absorbed', async () => {
+        profilesStore[USER] = { chainBaseline: 2, chainGasOwed: 0 };
+        sessionsStore.set(USER, { balance: 0 });
+        onChainBalance = '12';
+        await reconciler.reconcileSessionBalance(USER, SESSION, { force: true });
+        const after = await reconciler.isOnChainStateAbsorbed(USER, SESSION);
+        assert.strictEqual(after.absorbed, true,
+            'a confirm call for this tx must be refused a second credit');
+        assert.strictEqual(sessionsStore.get(USER).balance, 10, 'balance credited exactly once');
+    });
+
     console.log(`\n${passed} passing, ${failed} failing\n`);
     process.exit(failed > 0 ? 1 : 0);
 })();
