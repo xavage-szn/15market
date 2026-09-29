@@ -101,18 +101,31 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
     }).catch(() => {});
   };
 
+  // A trade only has a result once it has actually settled. Anything else is
+  // still in flight and must show the PENDING card.
+  //
+  // Deliberately an allowlist of *settled* states rather than a list of pending
+  // ones. The previous version enumerated PENDING/RESOLVING and treated every
+  // other status as a loss, which mis-classified two real live states: LOCKED
+  // (set when a trade is placed, before any verdict exists) and TIMEOUT (set
+  // when the backend is unreachable, carrying payout '0.00' and won undefined).
+  // Both rendered as a red LOST card. Defaulting unknown states to PENDING means
+  // a status added later shows as in-flight instead of as a fabricated loss.
+  const SETTLED_STATUSES = ['WON', 'PAID', 'LOST', 'RESOLVED', 'PAYOUT_FAILED', 'CANCELLED'];
   const isPending = (() => {
-    const s = String(trade?.status || '').toUpperCase();
     if (!trade) return false;
     if (trade.isPending) return true;
-    if (!s) return true; // no status at all â€” the verdict has not landed
-    return ['PENDING', 'RESOLVING', 'PUSH', 'QUEUED', 'OPEN'].includes(s);
+    const s = String(trade.status || '').toUpperCase();
+    if (!s) return true; // no status at all — the verdict has not landed
+    if (s === 'WON' || s === 'PAID') return false; // settled win
+    return !SETTLED_STATUSES.includes(s);
   })();
 
-  // A trade that has not settled has no result to show. Rendering it through
-  // the win/loss branch painted a red LOST card with a "-stake" figure, which
-  // read as a real loss the moment a user tapped their live trade.
-  const isWin = !isPending && (trade?.status === 'WON' || (trade?.payout > 0 && trade?.payout != null));
+  // Number() because TIMEOUT carries payout as the string '0.00'.
+  const isWin = !isPending && (
+    ['WON', 'PAID'].includes(String(trade?.status || '').toUpperCase()) ||
+    Number(trade?.payout) > 0
+  );
   const isUp = trade?.direction === 'UP';
   const sym = (trade?.symbol || '').toUpperCase().replace('USDT', '');
   const username = userProfile?.username || 'Trader';
