@@ -112,7 +112,11 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 
 // If we are local, and the env variable is missing or pointing to the production domain,
 // we should default to the local backend to prevent "Failed to Fetch" or CORS errors.
-const PRODUCTION_BACKEND = "https://api.15market.com";
+// Must stay in sync with render.yaml (VITE_KEEPER_URL_ARC) and the backend
+// ALLOWED_ORIGINS. This was "https://api.15market.com", which refuses TCP
+// connections outright, so any bundle built without VITE_KEEPER_URL_ARC fell
+// back to a dead host and every balance request failed.
+const PRODUCTION_BACKEND = "https://api.15market.online";
 
 const getBaseUrl = (envValue) => {
     // Absolute env URLs always win (works for local + production).
@@ -160,6 +164,12 @@ console.log(`🌐 [Config] API Endpoint: ${KEEPER_URL_ARC}`);
 console.log(`🎯 [Config] Rounds API: ${KEEPER_URL_ROUNDS}`);
 if (!isLocal && KEEPER_URL_ARC.includes('localhost')) {
     console.warn("⚠️ [Config] WARNING: Production frontend is trying to call a LOCAL backend. Check VITE_KEEPER_URL_ARC environment variable in Vercel.");
+}
+// A missing/relative VITE_KEEPER_URL_ARC silently falls back to the hardcoded
+// production domain, which is how a wrong host reached users unnoticed. Make the
+// fallback explicit and loud.
+if (!isLocal && !envUrlArc) {
+    console.warn(`⚠️ [Config] VITE_KEEPER_URL_ARC is not set at build time — falling back to ${PRODUCTION_BACKEND}. Set it in Render to pin the API host.`);
 }
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 

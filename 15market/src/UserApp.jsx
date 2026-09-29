@@ -941,18 +941,35 @@ const performStealthChecks = useCallback(async (addr) => {
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
 
+    let timeoutId = null;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      timeoutId = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        const bal = parseFloat(data.balance);
-        if (isNaN(bal)) return;
-        setSessionBalance(bal);
+      if (!res.ok) {
+        // A non-2xx here means the backend answered but refused (e.g. 503 while
+        // idempotency is unavailable). Previously this fell through silently and
+        // the user just saw no balance with no clue why.
+        console.warn(`[Balance] ${KEEPER_URL_ARC}/session/balance/${address} -> ${res.status} ${res.statusText}`);
+        return;
       }
-    } catch (err) { }
+      const data = await res.json();
+      const bal = parseFloat(data.balance);
+      if (isNaN(bal)) {
+        console.warn('[Balance] backend returned a non-numeric balance:', data?.balance);
+        return;
+      }
+      setSessionBalance(bal);
+    } catch (err) {
+      // Previously an empty catch, so an unreachable backend was completely
+      // invisible: the UI silently showed no balance. Surface it instead.
+      const reason = err?.name === 'AbortError' ? 'timed out after 8s' : (err?.message || 'network/CORS failure');
+      console.error(`[Balance] FAILED to reach ${KEEPER_URL_ARC}/session/balance/${address}: ${reason}`);
+    } finally {
+      // Was only cleared on the success path, so every failed request leaked
+      // its abort timer.
+      if (timeoutId) clearTimeout(timeoutId);
+    }
   }, [address]);
 
   const triggerGlobalRefresh = useCallback((force = false) => {
