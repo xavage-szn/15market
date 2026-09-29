@@ -26,6 +26,13 @@ CREATE TABLE IF NOT EXISTS credited_deposits (
 CREATE INDEX IF NOT EXISTS idx_credited_deposits_user ON credited_deposits(user_address);
 CREATE INDEX IF NOT EXISTS idx_credited_deposits_created ON credited_deposits(created_at DESC);
 
+-- ── Guard: never credit a negative amount ──────────────────────────────────
+-- Added BEFORE the backfill so a malformed historical row cannot abort the
+-- migration; GREATEST(...) above also clamps the backfilled values.
+ALTER TABLE credited_deposits DROP CONSTRAINT IF EXISTS credited_deposits_amount_nonneg;
+ALTER TABLE credited_deposits
+    ADD CONSTRAINT credited_deposits_amount_nonneg CHECK (amount >= 0);
+
 -- ── Backfill from the ledger ────────────────────────────────────────────────
 -- The trades table already stores the tx hash of every credited deposit.
 -- Seeding the table from it repairs history that was double-credited while the
@@ -35,7 +42,7 @@ INSERT INTO credited_deposits (tx_hash, user_address, amount, source, created_at
 SELECT DISTINCT ON (lower(t.tx_hash))
        lower(t.tx_hash),
        lower(t.user_address),
-       COALESCE(t.amount, 0),
+       GREATEST(COALESCE(t.amount, 0), 0),
        'backfill',
        to_timestamp(COALESCE(t.timestamp, 0) / 1000.0)
 FROM trades t
@@ -43,9 +50,8 @@ WHERE t.tx_hash IS NOT NULL
   AND t.tx_hash <> ''
   AND upper(t.status) IN ('CONFIRMED', 'WON', 'PAID', 'LOST', 'SETTLED')
   AND lower(t.user_address) IS NOT NULL
+-- DISTINCT ON without a matching leading ORDER BY returns an ARBITRARY row per
+-- tx hash. Order by the same expression, then newest first, so the backfill is
+-- deterministic and re-running it is a no-op.
+ORDER BY lower(t.tx_hash), COALESCE(t.timestamp, 0) DESC
 ON CONFLICT (tx_hash) DO NOTHING;
-
--- ── Guard: never credit a negative amount ──────────────────────────────────
-ALTER TABLE credited_deposits DROP CONSTRAINT IF EXISTS credited_deposits_amount_nonneg;
-ALTER TABLE credited_deposits
-    ADD CONSTRAINT credited_deposits_amount_nonneg CHECK (amount >= 0);
