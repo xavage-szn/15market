@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { History, ChevronRight, ChevronLeft, Share2, ExternalLink } from 'lucide-react';
+import { isTradeSettled } from '../utils/tradeStatus';
 
 const SideHistoryPane = ({
     isOpen,
@@ -129,12 +130,14 @@ const SideHistoryPane = ({
                                                     </div>
 
                                                     <div className="flex items-center gap-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => onViewReceipt(trade)}
-                                                            className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#17A364]/20 hover:bg-[#17A364]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
-                                                        >
-                                                            <Share2 size={12} />
-                                                        </button>
+                                                            {isTradeSettled(trade) && (
+                                                            <button
+                                                                onClick={() => onViewReceipt(trade)}
+                                                                className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#17A364]/20 hover:bg-[#17A364]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
+                                                            >
+                                                                <Share2 size={12} />
+                                                            </button>
+                                                            )}
                                                         {trade.tx && trade.tx.startsWith('0x') && trade.tx.length > 10 && (
                                                             <a
                                                                 href={`https://testnet.arcscan.app/tx/${trade.tx}`}

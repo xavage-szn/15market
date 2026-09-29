@@ -12,6 +12,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
+import { isTradeSettled } from '../utils/tradeStatus';
 
 const LOGO_MAP = {
   eth: '/ethereum.png',
@@ -382,6 +383,7 @@ export default function TradeHistoryTable({
 
                 {/* 3. Last things: Share icon & Explorer icon (no background on hover, only icon turns green) */}
                 <div className="flex items-center gap-1 shrink-0 justify-end w-[76px]">
+                  {isTradeSettled(trade) && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -396,6 +398,7 @@ export default function TradeHistoryTable({
                   >
                     <Share2 size={15} />
                   </button>
+                  )}
                   <a
                     href={hasTx ? `https://testnet.arcscan.app/tx/${txHash}` : 'https://testnet.arcscan.app'}
                     target="_blank"
@@ -476,6 +479,7 @@ export default function TradeHistoryTable({
                       ${Number(trade.amount).toFixed(2)}
                     </span>
                   </span>
+                  {isTradeSettled(trade) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onShare?.(trade); }}
                     className={`inline-flex items-center justify-center w-5 h-5 shrink-0 rounded-full ${isLight ? 'text-[#249C6C] hover:bg-[#249C6C]/10' : 'text-[#17A364] hover:bg-[#17A364]/10'}`}
@@ -483,6 +487,7 @@ export default function TradeHistoryTable({
                   >
                     <Share2 size={12} />
                   </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 min-h-5">
                   <span className="inline-flex items-center gap-1">

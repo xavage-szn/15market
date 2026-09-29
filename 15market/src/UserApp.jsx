@@ -10,9 +10,10 @@ import {
   MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
   Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock,
   History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp,
-  Layers, Sun, Moon
+  Layers, Sun, Moon, AlertTriangle
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
+import { isTradeInFlight, isTradeSettled } from "./utils/tradeStatus";
 import { parseEther, parseUnits } from "viem";
 // Solana imports removed
 
@@ -188,13 +189,15 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                     <div className={`text-[10px] font-medium ${isDark ? 'opacity-40 text-white' : 'text-[#0a261a]/60'}`}>
                       ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => onViewReceipt(trade)}
-                        className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#17A364]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#17A364]/5'}`}
-                      >
-                        <Share2 size={12} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {isTradeSettled(trade) && (
+                        <button
+                          onClick={() => onViewReceipt(trade)}
+                          className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#17A364]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#17A364]/5'}`}
+                        >
+                          <Share2 size={12} />
+                        </button>
+                        )}
                       <a
                         href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                         target="_blank"
@@ -810,8 +813,18 @@ const performStealthChecks = useCallback(async (addr) => {
   // Tapping a trade always opens the card. An unsettled trade shows a PENDING
   // card with a "check back later" disclaimer rather than being blocked, so
   // the user can see the stake and trade id while it is still live.
+  // Receipt cards only exist for a settled result. A trade that is still open
+  // (PENDING, RESOLVING, LOCKED, TIMEOUT, or any status the backend adds later)
+  // has no verdict to share, so it shows a disclaimer dialog instead of a card.
+  // See src/utils/tradeStatus.js for why this enumerates settled states.
+  const [pendingTradeNotice, setPendingTradeNotice] = useState(null);
+
   const handleViewReceipt = useCallback((trade) => {
     if (!trade) return;
+    if (isTradeInFlight(trade)) {
+      setPendingTradeNotice(trade);
+      return;
+    }
     setShareTrade(trade);
     setIsShareCardOpen(true);
   }, []);
@@ -3632,15 +3645,75 @@ const performStealthChecks = useCallback(async (addr) => {
            <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
             style={{ fontFamily: 'Arial, sans-serif' }}>
            </footer>
-           <Suspense fallback={null}>
-              <TradeShareCard
-               isOpen={isShareCardOpen}
-               onClose={() => setIsShareCardOpen(false)}
-               trade={shareTrade}
-               userProfile={userProfile}
-               theme={theme}
-             />
-           </Suspense>
+          <Suspense fallback={null}>
+            <TradeShareCard
+              isOpen={isShareCardOpen}
+              onClose={() => setIsShareCardOpen(false)}
+              trade={shareTrade}
+              userProfile={userProfile}
+              theme={theme}
+            />
+          </Suspense>
+
+          {/* Disclaimer dialog for trades that have not settled yet. */}
+          <AnimatePresence>
+            {pendingTradeNotice && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+                style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+                onClick={() => setPendingTradeNotice(null)}
+              >
+                <motion.div
+                  initial={{ scale: 0.94, y: 10 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.94, y: 10 }}
+                  transition={{ duration: 0.18 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-sm rounded-2xl p-6 text-center"
+                  style={{
+                    fontFamily: '"Comfortaa", cursive',
+                    backgroundColor: theme === 'light' ? '#ffffff' : '#141414',
+                    border: `1px solid ${theme === 'light' ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.12)'}`,
+                    boxShadow: '0 24px 60px rgba(0,0,0,0.45)',
+                  }}
+                >
+                  <div className="flex justify-center mb-3">
+                    <AlertTriangle size={38} strokeWidth={1.75} className="text-[#FFB020]" />
+                  </div>
+                  <h3
+                    className="text-[15px] font-black uppercase tracking-wider mb-2"
+                    style={{ color: theme === 'light' ? '#111827' : '#ffffff' }}
+                  >
+                    Trade Still Processing
+                  </h3>
+                  <p
+                    className="text-[12px] leading-relaxed mb-1"
+                    style={{ color: theme === 'light' ? '#4b5563' : 'rgba(255,255,255,0.60)' }}
+                  >
+                    This trade has not settled yet, so there is no result or receipt to show.
+                    A receipt card is created only once the market resolves the trade.
+                  </p>
+                  <p
+                    className="text-[11px] leading-relaxed mb-5"
+                    style={{ color: theme === 'light' ? '#6b7280' : 'rgba(255,255,255,0.40)' }}
+                  >
+                    Please check back later — the card unlocks as soon as it settles.
+                  </p>
+                  <button
+                    onClick={() => setPendingTradeNotice(null)}
+                    className="w-full py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wider text-white transition-colors"
+                    style={{ backgroundColor: '#FFB020' }}
+                  >
+                    Got It
+                  </button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
 
 
            {/* Onboarding Flow for new users */}

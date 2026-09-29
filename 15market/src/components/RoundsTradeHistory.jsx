@@ -1,5 +1,6 @@
 import React, { memo, useState, useMemo } from 'react';
 import { Lock, Share2, Check, X } from 'lucide-react';
+import { isTradeSettled } from '../utils/tradeStatus';
 
 function RoundsTradeHistoryComponent({
     tradeHistory,
@@ -76,12 +77,14 @@ function RoundsTradeHistoryComponent({
                                             {isWon ? <Check size={10} /> : <X size={10} />}
                                             {t.status}
                                         </div>
+                                        {isTradeSettled(t) && (
                                         <button
                                             onClick={() => { setSelectedPnLTrade(t); setIsPnLOpen(true); }}
                                             className={`p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'} text-white/40 hover:text-[#249C6C]`}
                                         >
                                             <Share2 size={16} />
                                         </button>
+                                        )}
                                     </div>
                                 </div>
                             );

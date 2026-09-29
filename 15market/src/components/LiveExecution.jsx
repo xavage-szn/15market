@@ -2,6 +2,7 @@ import React, { memo, useState, useEffect, useMemo, useRef } from 'react';
 import { Share2, X, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Stamp } from './Stamp';
+import { isTradeSettled } from '../utils/tradeStatus';
 import { KEEPER_URL_ARC } from '../constants';
 
 const LCD_COUNTER_STYLE = `
@@ -286,12 +287,17 @@ function LiveExecutionComponent({
                                                 </div>
                                             )}
                                             <div className="flex items-center gap-2 mt-1">
+                                                {/* Share appears only once the trade has settled and the
+                                                    win/lose card is ready. isFinal still admits TIMEOUT,
+                                                    which is not a real verdict, so use isTradeSettled. */}
+                                                {isTradeSettled(trade) && (
                                                 <button
                                                     onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
                                                     className={`p-2 rounded-full transition-all hover:scale-110 active:scale-95 border ${isLight ? 'bg-black/5 border-black/10 text-black hover:bg-black/10' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}
                                                 >
                                                     <Share2 size={14} />
                                                 </button>
+                                                )}
                                                 {isFinal && (
                                                     <button
                                                         onClick={() => removeTrade(trade.id)}

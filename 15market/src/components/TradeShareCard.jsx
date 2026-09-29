@@ -1,4 +1,4 @@
-﻿import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Share2, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
 
@@ -28,6 +28,39 @@ function getLogo(sym) {
   return LOGO_MAP[key] || null;
 }
 
+// ---------------------------------------------------------------------------
+// Capture pipeline caches.
+//
+// The card is built entirely in the browser: domToPng rasterizes the DOM through
+// an SVG foreignObject, the QR code is generated client-side, and the resulting
+// PNG is handed straight to navigator.share. Nothing here talks to the server,
+// so a server-side cache cannot make this faster. What was slow was the same
+// work repeated on every capture, so it is memoised for the page session.
+// ---------------------------------------------------------------------------
+const whiteLogoCache = new Map(); // data-card-logo key -> whitened PNG data URL
+const captureCache = new Map();   // trade id -> captured PNG data URL
+const importCache = new Map();    // module specifier -> settled dynamic import
+
+const importOnce = (specifier) => {
+  if (!importCache.has(specifier)) importCache.set(specifier, import(specifier));
+  return importCache.get(specifier);
+};
+
+// The card is a fixed 520x300 box with absolutely positioned text, so a font
+// that resolves late gets laid out with fallback metrics and the text collides -
+// that is the deformed export. Both card fonts must resolve before rasterizing.
+const CARD_FONTS = ['600 16px Comfortaa', '700 16px Comfortaa', '22px Autography'];
+
+const ensureFontsReady = async () => {
+  if (typeof document === 'undefined' || !document.fonts) return;
+  try {
+    await Promise.all(CARD_FONTS.map((f) => document.fonts.load(f).catch(() => {})));
+    await document.fonts.ready;
+  } catch {
+    // A font that never resolves must not block saving the card.
+  }
+};
+
 const waitForImage = (image) => {
   if (image.complete && image.naturalWidth > 0) return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -55,6 +88,10 @@ const waitForImage = (image) => {
 };
 
 const createWhiteImageDataUrl = async (image) => {
+  // Logos are static assets, so the whitened data URL is computed once and
+  // reused. Previously every capture redrew and re-encoded each logo.
+  const key = image?.dataset?.cardLogo;
+  if (key && whiteLogoCache.has(key)) return whiteLogoCache.get(key);
   try {
     await waitForImage(image);
     const canvas = document.createElement('canvas');
@@ -66,7 +103,9 @@ const createWhiteImageDataUrl = async (image) => {
     context.globalCompositeOperation = 'source-in';
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/png');
+    const dataUrl = canvas.toDataURL('image/png');
+    if (key) whiteLogoCache.set(key, dataUrl);
+    return dataUrl;
   } catch {
     return null;
   }
@@ -101,31 +140,7 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
     }).catch(() => {});
   };
 
-  // A trade only has a result once it has actually settled. Anything else is
-  // still in flight and must show the PENDING card.
-  //
-  // Deliberately an allowlist of *settled* states rather than a list of pending
-  // ones. The previous version enumerated PENDING/RESOLVING and treated every
-  // other status as a loss, which mis-classified two real live states: LOCKED
-  // (set when a trade is placed, before any verdict exists) and TIMEOUT (set
-  // when the backend is unreachable, carrying payout '0.00' and won undefined).
-  // Both rendered as a red LOST card. Defaulting unknown states to PENDING means
-  // a status added later shows as in-flight instead of as a fabricated loss.
-  const SETTLED_STATUSES = ['WON', 'PAID', 'LOST', 'RESOLVED', 'PAYOUT_FAILED', 'CANCELLED'];
-  const isPending = (() => {
-    if (!trade) return false;
-    if (trade.isPending) return true;
-    const s = String(trade.status || '').toUpperCase();
-    if (!s) return true; // no status at all — the verdict has not landed
-    if (s === 'WON' || s === 'PAID') return false; // settled win
-    return !SETTLED_STATUSES.includes(s);
-  })();
-
-  // Number() because TIMEOUT carries payout as the string '0.00'.
-  const isWin = !isPending && (
-    ['WON', 'PAID'].includes(String(trade?.status || '').toUpperCase()) ||
-    Number(trade?.payout) > 0
-  );
+  const isWin = trade?.status === 'WON' || trade?.payout > 0;
   const isUp = trade?.direction === 'UP';
   const sym = (trade?.symbol || '').toUpperCase().replace('USDT', '');
   const username = userProfile?.username || 'Trader';
@@ -138,7 +153,7 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
   useEffect(() => {
     if (isOpen && trade) {
       const verifyUrl = `https://15market.com/verify/${tradeId}`;
-      import('qrcode').then(QRCode => {
+      importOnce('qrcode').then(QRCode => {
         QRCode.default.toDataURL(verifyUrl, {
           width: 100,
           margin: 1,
@@ -154,6 +169,16 @@ const captureCard = async () => {
   const el = cardRef.current;
   if (!el) return null;
 
+  // Reuse the already-rasterized PNG when the same trade is shared again, so a
+  // second tap is instant instead of paying the full capture cost again.
+  const cacheKey = String(tradeId || '') + '|' + (isWin ? 'w' : 'l');
+  const cached = captureCache.get(cacheKey);
+  if (cached) return cached;
+
+  // Fonts first: domToPng inlines whatever the layout currently resolves to, so
+  // capturing before they settle is what produces the deformed card.
+  await ensureFontsReady();
+
   const whiteLogoDataUrls = new Map();
   const logoImages = Array.from(el.querySelectorAll('img[data-card-logo]'));
   for (const image of logoImages) {
@@ -161,8 +186,8 @@ const captureCard = async () => {
     if (dataUrl) whiteLogoDataUrls.set(image.dataset.cardLogo, dataUrl);
   }
 
-  const { domToPng } = await import('modern-screenshot');
-  return domToPng(el, {
+  const { domToPng } = await importOnce('modern-screenshot');
+  const dataUrl = await domToPng(el, {
     width: 520,
     height: 300,
     scale: 2,
@@ -175,13 +200,19 @@ const captureCard = async () => {
     filter: (node) => !node.classList?.contains('copy-id-btn'),
     onCloneEachNode: (node) => {
       const logoType = node?.dataset?.cardLogo;
-      const dataUrl = whiteLogoDataUrls.get(logoType);
-      if (!dataUrl) return;
-      node.src = dataUrl;
+      const logoDataUrl = whiteLogoDataUrls.get(logoType);
+      if (!logoDataUrl) return;
+      node.src = logoDataUrl;
       node.classList.remove('brightness-0', 'invert');
       node.style.setProperty('filter', 'none', 'important');
     },
   });
+  if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image')) {
+    captureCache.set(cacheKey, dataUrl);
+    // Keep the memo bounded; a session realistically touches a handful of cards.
+    if (captureCache.size > 20) captureCache.delete(captureCache.keys().next().value);
+  }
+  return dataUrl;
 };
 
 const handleNativeShare = async () => {
@@ -190,23 +221,19 @@ const handleNativeShare = async () => {
     try {
       const dataUrl = await captureCard();
       if (!dataUrl) { setSaveState(null); return; }
-      // An unsettled trade has no result to publish. Naming the file "loss"
-      // and sharing it would spread a verdict the market has not reached yet.
-      const resultSlug = isPending ? 'pending' : isWin ? 'win' : 'loss';
-      const resultTitle = isPending ? 'Processing' : isWin ? 'Win' : 'Loss';
       try {
         const res = await fetch(dataUrl);
         const blob = await res.blob();
-        const file = new File([blob], `15market-${resultSlug}.png`, { type: 'image/png' });
+        const file = new File([blob], `15market-${isWin ? 'win' : 'loss'}.png`, { type: 'image/png' });
         if (navigator.share) {
-          await navigator.share({ files: [file], title: `15market ${resultTitle}` });
+          await navigator.share({ files: [file], title: `15market ${isWin ? 'Win' : 'Loss'}` });
           setSaveState('saved');
           setTimeout(() => { setSaveState(null); onClose(); }, 1500);
           return;
         }
       } catch {}
       const link = document.createElement('a');
-      link.download = `15market-${resultSlug}-${tradeId}.png`;
+      link.download = `15market-${isWin ? 'win' : 'loss'}-${tradeId}.png`;
       link.href = dataUrl;
       link.click();
       setSaveState('saved');
@@ -216,12 +243,10 @@ const handleNativeShare = async () => {
 
   if (!trade) return null;
 
-  // Amber while the verdict is outstanding, so an unsettled trade can never be
-  // mistaken for a loss. Green/red are reserved for an actual settled result.
-  const accent = isPending ? '#FFB020' : isWin ? '#00FF88' : '#FF1744';
-  const accentMid = isPending ? '#B8860B' : isWin ? '#17A364' : '#D50000';
-  const accentDark = isPending ? '#8A6100' : isWin ? '#0d5c38' : '#8B0000';
-  const accentDeep = isPending ? '#5C3F00' : isWin ? '#063d23' : '#4a0000';
+  const accent = isWin ? '#00FF88' : '#FF1744';
+  const accentMid = isWin ? '#17A364' : '#D50000';
+  const accentDark = isWin ? '#0d5c38' : '#8B0000';
+  const accentDeep = isWin ? '#063d23' : '#4a0000';
 
   return (
     <AnimatePresence>
@@ -250,7 +275,7 @@ const handleNativeShare = async () => {
               <X size={18} />
             </button>
 
-            {/* Landscape Card â€” scale down on small screens so content fits */}
+            {/* Landscape Card ΓÇö scale down on small screens so content fits */}
             <div ref={wrapperRef} className="w-full overflow-hidden" style={{ maxWidth: '520px', height: `${300 * cardScale}px` }}>
               <div
                 ref={cardRef}
@@ -266,14 +291,14 @@ const handleNativeShare = async () => {
               {/* Ambient Glow */}
               <div
                 className="absolute -top-32 -left-32 w-80 h-80 rounded-full blur-[100px] opacity-25"
-                style={{ backgroundColor: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350' }}
+                style={{ backgroundColor: isWin ? '#17A364' : '#EF5350' }}
               />
               <div
                 className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full blur-[100px] opacity-15"
-                style={{ backgroundColor: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350' }}
+                style={{ backgroundColor: isWin ? '#17A364' : '#EF5350' }}
               />
 
-              {/* â•â•â•â•â•â•â• Ultra-Faded Sci-Fi Cyberspace Background â•â•â•â•â•â•â• */}
+              {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ Ultra-Faded Sci-Fi Cyberspace Background ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
               <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden rounded-3xl opacity-[0.45]">
                 <svg
                   width="100%" height="100%"
@@ -391,25 +416,13 @@ const handleNativeShare = async () => {
                       <div
                         className="text-[52px] font-black leading-none tracking-tighter"
                         style={{
-                          color: isPending ? '#FFB020' : isWin ? '#17A364' : '#EF5350',
-                          textShadow: isPending
-                            ? '0 0 30px rgba(255,176,32,0.25)'
-                            : isWin ? '0 0 30px rgba(23,163,100,0.3)' : '0 0 30px rgba(239,83,80,0.3)'
+                          color: isWin ? '#17A364' : '#EF5350',
+                          textShadow: isWin ? '0 0 30px rgba(23,163,100,0.3)' : '0 0 30px rgba(239,83,80,0.3)'
                         }}
                       >
-                        {isPending
-                          ? `$${Number(trade.amount || 0).toFixed(2)}`
-                          : `${isWin ? '+' : '-'}$${Number(isWin ? (trade.payout || 0) : (trade.amount || 0)).toFixed(2)}`}
+                        {isWin ? '+' : '-'}${Number(isWin ? (trade.payout || 0) : (trade.amount || 0)).toFixed(2)}
                       </div>
                     </div>
-                    {isPending && (
-                      <div
-                        className="mt-1 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider leading-snug"
-                        style={{ backgroundColor: 'rgba(255,176,32,0.12)', color: '#FFC94D', border: '1px solid rgba(255,176,32,0.3)' }}
-                      >
-                        Trade is processing â€” check back later for the result
-                      </div>
-                    )}
                     <div className="flex items-center gap-0 px-1 py-1 mt-auto">
                       <div className="flex-1">
                         <div className="text-white/25 text-[8px] font-bold uppercase tracking-widest">Stake</div>
@@ -442,9 +455,7 @@ const handleNativeShare = async () => {
                 <div
                   className="w-full h-full overflow-hidden flex flex-col items-center"
                   style={{
-                    background: isPending
-                      ? 'linear-gradient(180deg, #B8860B 0%, #8A6100 100%)'
-                      : isWin
+                    background: isWin
                       ? 'linear-gradient(180deg, #17A364 0%, #0d6b42 100%)'
                       : 'linear-gradient(180deg, #EF5350 0%, #c62828 100%)',
                     // Shadows are cast to the LEFT only. An omni or rightward
@@ -456,18 +467,27 @@ const handleNativeShare = async () => {
                     boxShadow: '-10px 0 30px rgba(0,0,0,0.7)',
                   }}
                 >
-                  <div className="absolute inset-0 opacity-[0.15] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+                  {/* Carbon-fibre weave. This used to be a third-party image from
+                      transparenttextures.com, which domToPng had to fetch and inline
+                      on every capture - a real network wait and a failure point.
+                      Pure CSS gives the same weave with no request at all. */}
+                  <div
+                    className="absolute inset-0 opacity-[0.15] pointer-events-none mix-blend-overlay"
+                    style={{
+                      backgroundImage:
+                        'repeating-linear-gradient(45deg, rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 1px, transparent 1px, transparent 3px),' +
+                        'repeating-linear-gradient(-45deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 1px, transparent 3px)',
+                    }}
+                  />
                   <div className="pt-3 -mt-[6.2%] text-center z-10 select-none">
                     <span
                       className="text-white font-black text-[13px] tracking-[0.22em] uppercase drop-shadow-sm"
                       style={{
                         fontFamily: '"Comfortaa", cursive',
-                        filter: isPending
-                          ? 'drop-shadow(0 0 10px rgba(255,176,32,0.8))'
-                          : isWin ? 'drop-shadow(0 0 10px rgba(23,163,100,0.8))' : 'drop-shadow(0 0 10px rgba(239,83,80,0.8))'
+                        filter: isWin ? 'drop-shadow(0 0 10px rgba(23,163,100,0.8))' : 'drop-shadow(0 0 10px rgba(239,83,80,0.8))'
                       }}
                     >
-                      {isPending ? 'PENDING' : isWin ? 'WON' : 'LOST'}
+                      {isWin ? 'WON' : 'LOST'}
                     </span>
                   </div>
                 </div>
@@ -476,12 +496,12 @@ const handleNativeShare = async () => {
               {/* 15market signature in right strip */}
               <style>{`@font-face { font-family: 'Autography'; src: url('/Autography.otf') format('opentype'); }`}</style>
               <div className="absolute right-0 top-0 bottom-0 w-[52px] flex flex-col items-center justify-center gap-2 pointer-events-none z-0 overflow-hidden">
-                <div className="h-[26px] w-px" style={{ backgroundColor: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
+                <div className="h-[26px] w-px" style={{ backgroundColor: isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
                 <span
                   style={{
                     fontFamily: '"Autography", cursive',
                     fontSize: '22px',
-                    color: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350',
+                    color: isWin ? '#17A364' : '#EF5350',
                     opacity: 0.3,
                     whiteSpace: 'nowrap',
                     writingMode: 'vertical-rl',
@@ -490,7 +510,7 @@ const handleNativeShare = async () => {
                 >
                   15market
                 </span>
-                <div className="h-[26px] w-px" style={{ backgroundColor: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
+                <div className="h-[26px] w-px" style={{ backgroundColor: isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
               </div>
 
               {/* QR Code */}

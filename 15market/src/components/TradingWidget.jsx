@@ -381,7 +381,6 @@ export default function TradingWidget({
   }, [stake, sessionBalance, selectedDuration, handleExecuteTrade]);
 
   const hasActiveTrade = !!activeTrade || isExecuting;
-  const displayBalance = sessionBalance || 0;
   const isLight = theme === 'light';
 
   return (
@@ -416,7 +415,6 @@ export default function TradingWidget({
           STAKE 
           <div className={`w-3 h-3 rounded-full border flex items-center justify-center text-[8px] font-bold ${isLight ? 'border-gray-300 text-gray-500' : 'border-white/20 text-white/40'}`}>i</div>
         </div>
-        <div className={`text-[11px] ${isLight ? 'text-[#6B7280]' : 'text-white/40'}`}>Balance: {displayBalance.toFixed(4)} USDC</div>
       </div>
       
       <div className="relative mb-4">

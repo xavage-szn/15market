@@ -19,7 +19,6 @@ function getLogoFilter(isLight) {
 }
 
 export default function LeftSidebar({
-  sessionBalance,
   activeMarket,
   setActiveMarket,
   defaultTokens,
@@ -29,7 +28,6 @@ export default function LeftSidebar({
   theme,
   isSmallScreen,
 }) {
-  const [showBalance, setShowBalance] = useState(false);
   const [marketTab, setMarketTab] = useState('all');
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(true);
@@ -75,8 +73,6 @@ export default function LeftSidebar({
     }
   };
 
-  const displayBalance = sessionBalance || 0;
-
   // Use listedTokens if available, otherwise fall back to defaultTokens
   const allTokens = listedTokens.length > 0 ? listedTokens : (defaultTokens || []);
   const tokensToDisplay = searchQuery
@@ -91,19 +87,6 @@ export default function LeftSidebar({
       className="w-full h-full bg-transparent flex flex-col overflow-hidden"
       style={{ fontFamily: '"Comfortaa", cursive' }}
     >
-      {/* Balance Section */}
-      <div className="pt-0 pb-3">
-        <div className={`text-[10px] font-bold tracking-widest uppercase mb-0.5 ${isLight ? 'text-[#6B7280]' : 'text-white/40'}`}>
-          BALANCE
-        </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className={`text-[32px] font-black tracking-tight leading-none ${isLight ? 'text-[#111827]' : 'text-white/90'}`}>
-            {displayBalance.toFixed(4)}
-          </span>
-          <span className={`text-[11px] font-medium ${isLight ? 'text-[#6B7280]' : 'text-white/40'}`}>USDC</span>
-        </div>
-      </div>
-
       {/* Search Bar */}
       <div className="relative mb-3">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />

@@ -56,14 +56,12 @@ function TradeTerminalComponent({
     sessionMode,
     setSessionMode,
     price,
-    sessionBalance,
     direction,
     setDirection,
     duration,
     setDuration,
     amount,
     handleAmountChange,
-    balance,
     handleSliderChange,
     sliderValue = 0,
     executeTrade,
@@ -128,12 +126,9 @@ function TradeTerminalComponent({
 
     const renderAmountBox = () => (
         <div className="flex flex-col gap-1 pointer-events-auto shrink-0">
-            <div className="flex items-center justify-between px-1.5">
-                <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`}>Amount</span>
-                <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-yellow-400'}`}>
-                    ${(sessionBalance || 0).toFixed(2)}
-                </span>
-            </div>
+              <div className="flex items-center justify-between px-1.5">
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`}>Amount</span>
+              </div>
             <div className={`flex flex-col gap-1 py-1 px-4 rounded-full border transition-all duration-300 ${isFocused ? (isLight ? 'bg-white border-[#17A364] shadow-[0_0_15px_rgba(23,163,100,0.15)]' : 'bg-black/40 border-[#17A364] shadow-[0_0_20px_rgba(23,163,100,0.2)]') : (isLight ? 'bg-white/60 border-[#17A364]/30 hover:border-[#17A364]/60' : 'bg-black/20 border-white/10 hover:border-white/20')}`}>
                 <div className="flex items-center justify-center relative w-full h-6 lg:h-8">
                     <span className={`absolute left-0 text-[12px] md:text-sm font-black transition-opacity duration-300 ${isFocused ? 'opacity-80 text-[#17A364]' : (isLight ? 'text-[#0a261a]/40' : 'text-white/40')}`}>$</span>
