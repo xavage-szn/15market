@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+﻿import React, { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Share2, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
 
@@ -101,7 +101,18 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
     }).catch(() => {});
   };
 
-  const isWin = trade?.status === 'WON' || trade?.payout > 0;
+  const isPending = (() => {
+    const s = String(trade?.status || '').toUpperCase();
+    if (!trade) return false;
+    if (trade.isPending) return true;
+    if (!s) return true; // no status at all â€” the verdict has not landed
+    return ['PENDING', 'RESOLVING', 'PUSH', 'QUEUED', 'OPEN'].includes(s);
+  })();
+
+  // A trade that has not settled has no result to show. Rendering it through
+  // the win/loss branch painted a red LOST card with a "-stake" figure, which
+  // read as a real loss the moment a user tapped their live trade.
+  const isWin = !isPending && (trade?.status === 'WON' || (trade?.payout > 0 && trade?.payout != null));
   const isUp = trade?.direction === 'UP';
   const sym = (trade?.symbol || '').toUpperCase().replace('USDT', '');
   const username = userProfile?.username || 'Trader';
@@ -166,19 +177,23 @@ const handleNativeShare = async () => {
     try {
       const dataUrl = await captureCard();
       if (!dataUrl) { setSaveState(null); return; }
+      // An unsettled trade has no result to publish. Naming the file "loss"
+      // and sharing it would spread a verdict the market has not reached yet.
+      const resultSlug = isPending ? 'pending' : isWin ? 'win' : 'loss';
+      const resultTitle = isPending ? 'Processing' : isWin ? 'Win' : 'Loss';
       try {
         const res = await fetch(dataUrl);
         const blob = await res.blob();
-        const file = new File([blob], `15market-${isWin ? 'win' : 'loss'}.png`, { type: 'image/png' });
+        const file = new File([blob], `15market-${resultSlug}.png`, { type: 'image/png' });
         if (navigator.share) {
-          await navigator.share({ files: [file], title: `15market ${isWin ? 'Win' : 'Loss'}` });
+          await navigator.share({ files: [file], title: `15market ${resultTitle}` });
           setSaveState('saved');
           setTimeout(() => { setSaveState(null); onClose(); }, 1500);
           return;
         }
       } catch {}
       const link = document.createElement('a');
-      link.download = `15market-${isWin ? 'win' : 'loss'}-${tradeId}.png`;
+      link.download = `15market-${resultSlug}-${tradeId}.png`;
       link.href = dataUrl;
       link.click();
       setSaveState('saved');
@@ -188,10 +203,12 @@ const handleNativeShare = async () => {
 
   if (!trade) return null;
 
-  const accent = isWin ? '#00FF88' : '#FF1744';
-  const accentMid = isWin ? '#17A364' : '#D50000';
-  const accentDark = isWin ? '#0d5c38' : '#8B0000';
-  const accentDeep = isWin ? '#063d23' : '#4a0000';
+  // Amber while the verdict is outstanding, so an unsettled trade can never be
+  // mistaken for a loss. Green/red are reserved for an actual settled result.
+  const accent = isPending ? '#FFB020' : isWin ? '#00FF88' : '#FF1744';
+  const accentMid = isPending ? '#B8860B' : isWin ? '#17A364' : '#D50000';
+  const accentDark = isPending ? '#8A6100' : isWin ? '#0d5c38' : '#8B0000';
+  const accentDeep = isPending ? '#5C3F00' : isWin ? '#063d23' : '#4a0000';
 
   return (
     <AnimatePresence>
@@ -220,7 +237,7 @@ const handleNativeShare = async () => {
               <X size={18} />
             </button>
 
-            {/* Landscape Card — scale down on small screens so content fits */}
+            {/* Landscape Card â€” scale down on small screens so content fits */}
             <div ref={wrapperRef} className="w-full overflow-hidden" style={{ maxWidth: '520px', height: `${300 * cardScale}px` }}>
               <div
                 ref={cardRef}
@@ -236,14 +253,14 @@ const handleNativeShare = async () => {
               {/* Ambient Glow */}
               <div
                 className="absolute -top-32 -left-32 w-80 h-80 rounded-full blur-[100px] opacity-25"
-                style={{ backgroundColor: isWin ? '#17A364' : '#EF5350' }}
+                style={{ backgroundColor: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350' }}
               />
               <div
                 className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full blur-[100px] opacity-15"
-                style={{ backgroundColor: isWin ? '#17A364' : '#EF5350' }}
+                style={{ backgroundColor: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350' }}
               />
 
-              {/* ═══════ Ultra-Faded Sci-Fi Cyberspace Background ═══════ */}
+              {/* â•â•â•â•â•â•â• Ultra-Faded Sci-Fi Cyberspace Background â•â•â•â•â•â•â• */}
               <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden rounded-3xl opacity-[0.45]">
                 <svg
                   width="100%" height="100%"
@@ -361,13 +378,25 @@ const handleNativeShare = async () => {
                       <div
                         className="text-[52px] font-black leading-none tracking-tighter"
                         style={{
-                          color: isWin ? '#17A364' : '#EF5350',
-                          textShadow: isWin ? '0 0 30px rgba(23,163,100,0.3)' : '0 0 30px rgba(239,83,80,0.3)'
+                          color: isPending ? '#FFB020' : isWin ? '#17A364' : '#EF5350',
+                          textShadow: isPending
+                            ? '0 0 30px rgba(255,176,32,0.25)'
+                            : isWin ? '0 0 30px rgba(23,163,100,0.3)' : '0 0 30px rgba(239,83,80,0.3)'
                         }}
                       >
-                        {isWin ? '+' : '-'}${Number(isWin ? (trade.payout || 0) : (trade.amount || 0)).toFixed(2)}
+                        {isPending
+                          ? `$${Number(trade.amount || 0).toFixed(2)}`
+                          : `${isWin ? '+' : '-'}$${Number(isWin ? (trade.payout || 0) : (trade.amount || 0)).toFixed(2)}`}
                       </div>
                     </div>
+                    {isPending && (
+                      <div
+                        className="mt-1 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider leading-snug"
+                        style={{ backgroundColor: 'rgba(255,176,32,0.12)', color: '#FFC94D', border: '1px solid rgba(255,176,32,0.3)' }}
+                      >
+                        Trade is processing â€” check back later for the result
+                      </div>
+                    )}
                     <div className="flex items-center gap-0 px-1 py-1 mt-auto">
                       <div className="flex-1">
                         <div className="text-white/25 text-[8px] font-bold uppercase tracking-widest">Stake</div>
@@ -400,7 +429,9 @@ const handleNativeShare = async () => {
                 <div
                   className="w-full h-full overflow-hidden flex flex-col items-center"
                   style={{
-                    background: isWin
+                    background: isPending
+                      ? 'linear-gradient(180deg, #B8860B 0%, #8A6100 100%)'
+                      : isWin
                       ? 'linear-gradient(180deg, #17A364 0%, #0d6b42 100%)'
                       : 'linear-gradient(180deg, #EF5350 0%, #c62828 100%)',
                     // Shadows are cast to the LEFT only. An omni or rightward
@@ -418,10 +449,12 @@ const handleNativeShare = async () => {
                       className="text-white font-black text-[13px] tracking-[0.22em] uppercase drop-shadow-sm"
                       style={{
                         fontFamily: '"Comfortaa", cursive',
-                        filter: isWin ? 'drop-shadow(0 0 10px rgba(23,163,100,0.8))' : 'drop-shadow(0 0 10px rgba(239,83,80,0.8))'
+                        filter: isPending
+                          ? 'drop-shadow(0 0 10px rgba(255,176,32,0.8))'
+                          : isWin ? 'drop-shadow(0 0 10px rgba(23,163,100,0.8))' : 'drop-shadow(0 0 10px rgba(239,83,80,0.8))'
                       }}
                     >
-                      {isWin ? 'WON' : 'LOST'}
+                      {isPending ? 'PENDING' : isWin ? 'WON' : 'LOST'}
                     </span>
                   </div>
                 </div>
@@ -430,12 +463,12 @@ const handleNativeShare = async () => {
               {/* 15market signature in right strip */}
               <style>{`@font-face { font-family: 'Autography'; src: url('/Autography.otf') format('opentype'); }`}</style>
               <div className="absolute right-0 top-0 bottom-0 w-[52px] flex flex-col items-center justify-center gap-2 pointer-events-none z-0 overflow-hidden">
-                <div className="h-[26px] w-px" style={{ backgroundColor: isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
+                <div className="h-[26px] w-px" style={{ backgroundColor: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
                 <span
                   style={{
                     fontFamily: '"Autography", cursive',
                     fontSize: '22px',
-                    color: isWin ? '#17A364' : '#EF5350',
+                    color: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350',
                     opacity: 0.3,
                     whiteSpace: 'nowrap',
                     writingMode: 'vertical-rl',
@@ -444,7 +477,7 @@ const handleNativeShare = async () => {
                 >
                   15market
                 </span>
-                <div className="h-[26px] w-px" style={{ backgroundColor: isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
+                <div className="h-[26px] w-px" style={{ backgroundColor: isPending ? '#B8860B' : isWin ? '#17A364' : '#EF5350', opacity: 0.3 }} />
               </div>
 
               {/* QR Code */}

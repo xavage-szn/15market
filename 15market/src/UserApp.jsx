@@ -807,18 +807,14 @@ const performStealthChecks = useCallback(async (addr) => {
     setToast({ id: Date.now() + Math.random(), message, type, onClick });
   }, []);
 
-  // Receipts are only available once the market has settled. Clicking a still
-  // running trade must not open a win/lose card.
+  // Tapping a trade always opens the card. An unsettled trade shows a PENDING
+  // card with a "check back later" disclaimer rather than being blocked, so
+  // the user can see the stake and trade id while it is still live.
   const handleViewReceipt = useCallback((trade) => {
     if (!trade) return;
-    const status = String(trade.status || '').toUpperCase();
-    if (status === 'PENDING' || status === 'RESOLVING' || trade.isPending) {
-      notify('This trade is still live. The receipt unlocks when the market settles.', 'error');
-      return;
-    }
     setShareTrade(trade);
     setIsShareCardOpen(true);
-  }, [notify]);
+  }, []);
 
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   // Authoritative lock echo: backend verdict (status + settlementPrice) per betId.
