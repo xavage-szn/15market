@@ -237,6 +237,7 @@ class ProfileService {
         this.sbChainReconAvailable = true; // false once the chain-recon columns are known to be missing
         this.sbColumnsProbed = false;
         this.sbTradeTableAvailable = null;
+        this.sbIdempotencyAvailable = null; // null = unprobed, false = table missing
         this.sbInitPromise = null;
         this.sbLoggedDisabled = false;
 
@@ -263,6 +264,7 @@ class ProfileService {
         this.sbInitPromise = (async () => {
             await this.probeSupabaseColumns();
             await this.probeSupabaseTradeTable();
+            await this.probeSupabaseIdempotencyTable();
             if (this.sbTradeTableAvailable === null) {
                 // Transient probe failure. Drop the memo so the next caller
                 // retries instead of running degraded for the whole process.
@@ -305,6 +307,93 @@ class ProfileService {
             // next call probes again once Supabase is reachable.
             this.sbTradeTableAvailable = null;
             console.warn('[Supabase] Trades table probe failed, will retry:', e.message);
+        }
+    }
+
+    /**
+     * Claim the exclusive right to credit a deposit tx hash.
+     *
+     * The insert IS the lock: credited_deposits.tx_hash is the primary key, so
+     * a second claim of the same transfer collides (Postgres 23505) and is
+     * rejected. Durable across restarts and safe across multiple instances,
+     * unlike the in-process Set this replaces.
+     *
+     * Fails CLOSED. If the table has not been migrated yet, or Supabase cannot
+     * be reached, this returns { claimed: false, reason } rather than crediting
+     * on a guess — double-crediting a deposit is far worse than refusing one.
+     *
+     * @returns {Promise<{claimed: boolean, reason?: string}>}
+     */
+    async claimDeposit(txHash, userAddress, amount, source = 'fund-confirm') {
+        const hash = String(txHash || '').toLowerCase();
+        if (!hash) return { claimed: false, reason: 'missing-tx-hash' };
+        if (!SUPABASE_ENABLED) {
+            return { claimed: false, reason: 'supabase-disabled' };
+        }
+        if (this.sbIdempotencyAvailable === false) {
+            return { claimed: false, reason: 'table-missing' };
+        }
+        try {
+            const res = await supabaseRequest('/rest/v1/credited_deposits', {
+                method: 'POST',
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json',
+                    // resolve=ignore-duplicates: swallow the 23505 conflict into
+                    // an empty body instead of an error, so a genuine unique
+                    // violation is distinguishable from a real failure below.
+                    'Prefer': 'resolution=ignore-duplicates,return=minimal'
+                },
+                body: JSON.stringify({
+                    tx_hash: hash,
+                    user_address: String(userAddress || '').toLowerCase(),
+                    amount: Number(amount || 0),
+                    source
+                })
+            });
+
+            // 201 = we inserted and now own the credit.
+            if (res.status === 201) {
+                this.sbIdempotencyAvailable = true;
+                return { claimed: true };
+            }
+            // 409 = the tx hash is already present, someone else credited it.
+            if (res.status === 409) {
+                this.sbIdempotencyAvailable = true;
+                return { claimed: false, reason: 'already-credited' };
+            }
+
+            const text = await res.text().catch(() => '');
+            if (res.status === 400 || res.status === 404 || res.status === 401 || res.status === 403) {
+                // Schema/auth problems. Latch off so we do not hammer a broken
+                // table, and fail closed on every later deposit.
+                if (res.status === 404) this.sbIdempotencyAvailable = false;
+                console.error(`[Idempotency] claimDeposit rejected (${res.status}): ${text.slice(0, 200)}`);
+                return { claimed: false, reason: this.sbIdempotencyAvailable === false ? 'table-missing' : 'rejected' };
+            }
+
+            throw new Error(`claimDeposit failed (${res.status}): ${text.slice(0, 200)}`);
+        } catch (e) {
+            // Network blip / timeout. Do NOT latch: the table may be fine and
+            // the next attempt should retry rather than fail forever.
+            console.error('[Idempotency] claimDeposit error, deposit NOT credited:', e.message);
+            return { claimed: false, reason: 'unavailable' };
+        }
+    }
+
+    async probeSupabaseIdempotencyTable() {
+        if (!SUPABASE_ENABLED || this.sbIdempotencyAvailable !== null) return;
+        try {
+            const res = await supabaseRequest('/rest/v1/credited_deposits?select=tx_hash&limit=1', { timeout: 20000 });
+            this.sbIdempotencyAvailable = res.ok;
+            if (!res.ok) {
+                console.error('[Idempotency] credited_deposits table unavailable — apply supabase/migrations/004_deposit_idempotency.sql. Deposits will be REFUSED (not double-credited) until then.');
+            } else {
+                console.log('[Idempotency] credited_deposits table ready — deposit credits are idempotent.');
+            }
+        } catch (e) {
+            this.sbIdempotencyAvailable = null; // retry later, do not latch
+            console.warn('[Idempotency] table probe failed, will retry:', e.message);
         }
     }
 

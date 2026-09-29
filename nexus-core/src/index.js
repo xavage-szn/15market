@@ -1399,8 +1399,25 @@ app.post('/session/deposit', async (req, res) => {
     }
 
     // ── 3. Idempotency: never credit the same transfer twice ──────────────
-    if (_creditedDepositTxs.has(txHash.toLowerCase())) {
-      return res.status(409).json({ error: "Deposit already credited" });
+    // The claim is a durable INSERT on credited_deposits.tx_hash (PRIMARY KEY).
+    // It replaces the old in-process Set, which was lost on every restart and
+    // so allowed a replay inside the 1h signature window to credit twice.
+    // Fails closed: if the table is missing or Supabase is unreachable we
+    // refuse the deposit rather than risk crediting it twice.
+    // Claim BEFORE crediting. If the process dies between the two, the
+    // on-chain reconciler recovers it (the baseline never advanced, so it sees
+    // the transfer as new money) and a client retry then gets a 409 that is
+    // genuinely true. Claiming after crediting would leave a window in which a
+    // crash double-credits instead of double-refusing.
+    const claim = await profiles.claimDeposit(txHash, userAddr, creditedAmount, 'fund-confirm');
+    if (!claim.claimed) {
+        if (claim.reason === 'already-credited') {
+            return res.status(409).json({ error: "Deposit already credited" });
+        }
+        console.error(`[Deposit] refusing credit, idempotency unavailable (${claim.reason}) for tx ${txHash}`);
+        return res.status(503).json({
+            error: "Deposits are temporarily unavailable. Please retry shortly."
+        });
     }
 
     let session = cache.sessions.get(userAddr);
@@ -1418,25 +1435,34 @@ app.post('/session/deposit', async (req, res) => {
       });
     }
     profiles.upsert(userAddr, { balance: session.balance });
+    // Keep the in-process set as a cheap fast path only. The authoritative
+    // idempotency check is the credited_deposits insert above.
     _creditedDepositTxs.add(txHash.toLowerCase());
 
     // The reconciler watches the same on-chain balance. Advance the baseline by
     // exactly what we just credited so it does not credit this transfer again.
+    // This MUST NOT fail silently: if the baseline does not move, the
+    // reconciler independently credits the same transfer a second time.
     try {
-      chainReconciler.advanceBaselineForCreditedDeposit(userAddr, creditedAmount);
+        chainReconciler.advanceBaselineForCreditedDeposit(userAddr, creditedAmount);
     } catch (reconErr) {
-      console.warn('[Deposit] baseline advance failed:', reconErr.message);
+        console.error('[Deposit] CRITICAL: baseline advance failed, reconciler may double-credit this deposit:', reconErr.message);
     }
 
     console.log(`[Deposit] Verified credit: ${creditedAmount} USDC to ${userAddr} | TX: ${txHash}`);
 
+    // Id derived from the tx hash, NOT from Date.now(). A replayed transfer
+    // then collides on the same id in both the in-memory `exists` check and the
+    // trades table primary key, instead of inserting a second row.
     cache.pushHistory(userAddr, {
-      type: 'DEPOSIT',
-      amount: creditedAmount,
-      timestamp: Date.now(),
-      txHash,
-      status: 'CONFIRMED',
-      source: 'verified-deposit'
+        id: `DEPOSIT-${txHash.toLowerCase()}`,
+        betId: `DEPOSIT-${txHash.toLowerCase()}`,
+        type: 'DEPOSIT',
+        amount: creditedAmount,
+        timestamp: Date.now(),
+        txHash,
+        status: 'CONFIRMED',
+        source: 'verified-deposit'
     });
 
     io.to(userAddr).emit('balance_update', {
