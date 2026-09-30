@@ -91,10 +91,18 @@ if (!ADMIN_SECRET) {
  */
 function generateAdminToken(ip) {
   if (!ADMIN_SECRET) return null;
-  const nonce = crypto.randomBytes(24).toString('hex');
-  const payload = `${Date.now()}:${ip}:${nonce}`;
+  const payload = JSON.stringify({
+    ts: Date.now(),
+    ip: String(ip || ''),
+    nonce: crypto.randomBytes(24).toString('hex')
+  });
   const signature = crypto.createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
-  const token = Buffer.from(`${payload}:${signature}`).toString('base64');
+  // The payload is base64'd whole rather than joined with ':' because an address
+  // can itself contain colons — Node reports every IPv4 connection as
+  // '::ffff:127.0.0.1', so a colon-delimited token shredded the address on
+  // verification and the signature never matched. That made every admin request
+  // fail, which is why this path looked simply "unreachable".
+  const token = Buffer.from(`${payload}.${signature}`).toString('base64');
   adminSessions.set(token, { createdAt: Date.now(), ip });
   return token;
 }
@@ -129,14 +137,19 @@ function requireAdminAuth(req, res, next) {
   // Verify HMAC integrity
   try {
     const decoded = Buffer.from(token, 'base64').toString('utf8');
-    const parts = decoded.split(':');
-    if (parts.length < 4) return res.status(401).json({ error: 'Malformed token' });
+    const sep = decoded.lastIndexOf('.');
+    if (sep < 1) return res.status(401).json({ error: 'Malformed token' });
 
-    const [ts, ip, nonce, signature] = parts;
-    const payload = `${ts}:${ip}:${nonce}`;
+    const payload = decoded.slice(0, sep);
+    const signature = decoded.slice(sep + 1);
     const expected = crypto.createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
 
-    if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) {
+    // Compare BUFFER lengths, not string lengths. `expected` is 64 hex
+    // characters while its buffer is 32 bytes, so guarding on the string length
+    // rejected every validly signed token.
+    const sigBuf = Buffer.from(signature, 'hex');
+    const expBuf = Buffer.from(expected, 'hex');
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
       return res.status(401).json({ error: 'Invalid admin token signature' });
     }
   } catch (e) {
@@ -144,6 +157,86 @@ function requireAdminAuth(req, res, next) {
   }
 
   next();
+}
+
+// ─── ADMIN LOGIN ─────────────────────────────────────────────────────────────
+//
+// generateAdminToken existed but nothing ever called it, so there was no way to
+// obtain a bearer token and requireAdminAuth was unreachable in practice. The
+// credentials it needed (ADMIN_USERNAME / ADMIN_PASSWORD) were already in the
+// environment; only the route was missing.
+//
+// The token is short-lived and server-signed. The secret never leaves the
+// server, which is the whole point: a shared secret in the admin FRONTEND would
+// be inlined into the public JS bundle and readable by anyone who opens the
+// admin site.
+
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+// Brute-force damper. Small and in-process, which is enough to make online
+// guessing impractical without pulling in a rate-limit dependency.
+const loginAttempts = new Map(); // ip -> { count, firstAt }
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+
+// Length-safe constant-time compare: timingSafeEqual throws on a length
+// mismatch, which would itself leak the length.
+function safeEqual(a, b) {
+  const bufA = Buffer.from(String(a ?? ''), 'utf8');
+  const bufB = Buffer.from(String(b ?? ''), 'utf8');
+  if (bufA.length !== bufB.length) {
+    // Still burn a comparison so a wrong length is not obviously faster.
+    crypto.timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function adminLoginConfigured() {
+  return !!(ADMIN_SECRET && ADMIN_USERNAME && ADMIN_PASSWORD);
+}
+
+/**
+ * POST /admin/login  { username, password } -> { token, expiresIn }
+ */
+function handleAdminLogin(req, res) {
+  if (!adminLoginConfigured()) {
+    return res.status(503).json({
+      error: 'Admin login not configured. Set ADMIN_API_SECRET, ADMIN_USERNAME and ADMIN_PASSWORD.'
+    });
+  }
+
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+
+  if (record?.lockedUntil && now < record.lockedUntil) {
+    const secs = Math.ceil((record.lockedUntil - now) / 1000);
+    return res.status(429).json({ error: `Too many failed attempts. Try again in ${secs}s.` });
+  }
+  if (record && now - record.firstAt > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(ip);   // window elapsed, start fresh
+  }
+
+  const { username, password } = req.body || {};
+  const ok = safeEqual(username, ADMIN_USERNAME) & safeEqual(password, ADMIN_PASSWORD);
+
+  if (!ok) {
+    const cur = loginAttempts.get(ip) || { count: 0, firstAt: now };
+    cur.count += 1;
+    if (cur.count >= MAX_LOGIN_ATTEMPTS) cur.lockedUntil = now + LOGIN_LOCKOUT_MS;
+    loginAttempts.set(ip, cur);
+    console.warn(`[Security] Failed admin login from ${ip} (attempt ${cur.count})`);
+    // Deliberately identical to a bad username, so this cannot enumerate accounts.
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  loginAttempts.delete(ip);
+  const token = generateAdminToken(ip);
+  console.log(`[Security] Admin session issued to ${ip}`);
+  return res.json({ token, expiresIn: 300 });
 }
 
 // ─── DEPOSIT TX VERIFICATION ────────────────────────────────────────────────
@@ -389,6 +482,8 @@ module.exports = {
   isEncrypted,
   generateAdminToken,
   requireAdminAuth,
+  handleAdminLogin,
+  adminLoginConfigured,
   verifyDepositTx,
   checkRateLimit,
   verifyAddressSignature,
