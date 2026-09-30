@@ -151,6 +151,56 @@ class ClassicEngine {
     trade.isSettled = true;
     trade.expiryEmitted = true;
 
+    // ── DISPUTE ────────────────────────────────────────────────────────────
+    // A trade that cannot be decided is parked, NOT settled. It used to be
+    // declared a LOST here, which meant a price-feed gap silently cost the user
+    // their entire stake: our failure, billed to them as a loss. The same
+    // happened in the catch below, where ANY exception became a LOST.
+    //
+    // A DISPUTE trade keeps its stake, stays visible in the user's history with
+    // a DISPUTE status (which the client renders as unsettled), and waits for an
+    // admin to clear it. No money moves and no verdict is invented.
+    const parkForDispute = (reason, detail) => {
+      // profiles is required lazily inside methods in this file, not at module
+      // scope, so it must be pulled in here. Getting this wrong is not a no-op:
+      // the reference threw a ReferenceError, which meant a dispute was never
+      // persisted or pushed to the user - the one path that must never fail
+      // silently.
+      const profiles = require('./profiles');
+      trade.status = 'DISPUTE';
+      trade.disputeReason = reason;
+      trade.disputeDetail = detail || null;
+      trade.disputeAt = Date.now();
+      // Deliberately NOT setting lockedExitPrice / lockedWon / settledAt: a
+      // verdict must not exist for a trade we could not decide, and an admin
+      // re-settle has to be able to compute it fresh from a usable price.
+      console.error(
+        `[Engine] #${trade.id} PARKED IN DISPUTE (${reason}: ${detail}) — ` +
+        `stake held, no verdict. Needs admin resolution.`
+      );
+      profiles.recordBetResult(trade.id, {
+        status: 'DISPUTE',
+        settled_at: null
+      });
+      cache.pushHistory(trade.userAddr, {
+        ...trade,
+        status: 'DISPUTE',
+        disputeReason: reason
+      });
+      // Out of the recovery sweep: a dispute is waiting on a human, not on the
+      // automatic settler, so re-restoring it would only spin. It stays in the
+      // trades table and in the user's history where an admin can find it.
+      cache.resolveOpenTrade(trade.id);
+      this.io.to(trade.userAddr).emit('trade_disputed', {
+        betId: trade.id,
+        status: 'DISPUTE',
+        reason,
+        // The stake is untouched - say so plainly rather than implying a loss.
+        message: 'We could not verify this trade\'s result. Your stake is safe and an admin will resolve it.'
+      });
+      this._noteDispute(trade, reason);
+    };
+
     try {
       // If the result was already captured (e.g. a zombie being completed by the
       // recovery sweep or a force-settle), REUSE the original locked exit price —
@@ -159,22 +209,29 @@ class ClassicEngine {
         ? trade.lockedExitPrice
         : this.captureExitPrice(trade);
 
-      // A nonsense / feed-down exit price must NOT decide an outcome — treat as LOST.
+      // A nonsense / feed-down exit price must NOT decide an outcome.
       const validExit = Number.isFinite(exitPrice) && exitPrice > 0;
-      const isUp = this.resolveDirection(trade.direction) === 1;
-      const recomputed = validExit ? (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice)) : false;
+      const isUp = this.resolveDirection(trade.direction);
+
+      // ── The boundary: a decidable trade settles automatically, exactly as
+      // before. Nothing below this point is new behaviour.
+      if (!validExit) {
+        return parkForDispute('INVALID_EXIT_PRICE', String(exitPrice));
+      }
+      if (isUp === null) {
+        return parkForDispute('INVALID_DIRECTION', JSON.stringify(trade.direction));
+      }
+      // ── End boundary. Everything after here is the pre-existing automatic
+      // settlement path and is unchanged.
+
+      const recomputed = isUp === 1 ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
       const won = trade.lockedWon !== undefined ? trade.lockedWon : recomputed;
 
       trade.lockedExitPrice = exitPrice;
       trade.lockedWon = won;
       trade.settledAt = Date.now();
 
-      console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} @ settleAt ${trade.settleAt} | Dir: ${isUp === 1 ? 'UP' : isUp === 0 ? 'DOWN' : 'INVALID'} | validExit: ${validExit}`);
-      if (!validExit) {
-        console.error(`[Engine] #${trade.id} LOCKED LOST due to INVALID exit price (${exitPrice}) — if this trade was expected to win, this is a PRICE-FEED issue at settleAt; check priceService + snapshot stream.`);
-      } else if (isUp === null) {
-        console.error(`[Engine] #${trade.id} direction INVALID (${JSON.stringify(trade.direction)}) — verdict may be wrong; check execute tradeParams.direction.`);
-      }
+      console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} @ settleAt ${trade.settleAt} | Dir: ${isUp === 1 ? 'UP' : 'DOWN'} | validExit: true`);
 
       // Cache the result in Redis — pure cache, best-effort, never throws upward.
       cache.cacheTradeResult(trade.id, {
@@ -198,30 +255,78 @@ class ClassicEngine {
       });
 
       if (won) {
+        this._noteSettled(true);
         this.creditWinner(trade, exitPrice);
         this.settleOnChainBackground(trade);
       } else {
         trade.status = 'LOST';
+        this._noteSettled(false);
         this.settleTradeLocally(trade);
       }
       // Keep the idempotency ledger in step with the settlement so an operator
       // reconciling balances can see the bet is closed, not stuck.
-      profiles.recordBetResult(trade.id, {
-        status: trade.status,
-        settled_at: new Date().toISOString()
-      });
-    } catch (err) {
-      // NEVER leave the client hanging in RESOLVING with no backend error.
-      console.error(`[Engine] lockResult ERROR for #${trade.id}:`, err?.message || err);
+      //
+      // Wrapped: `profiles` is not in module scope in this file, and a
+      // ReferenceError here used to be thrown AFTER the money had already moved,
+      // landing in the catch below and leaving the ledger row stuck on PENDING
+      // for a trade that had in fact settled. Ledger bookkeeping must never be
+      // able to break settlement.
       try {
-        if (trade.status === 'PENDING') {
-          trade.status = 'LOST';
-          this.settleTradeLocally(trade);
+        require('./profiles').recordBetResult(trade.id, {
+          status: trade.status,
+          settled_at: new Date().toISOString()
+        });
+      } catch (ledgerErr) {
+        console.error(`[Engine] could not update the ledger for #${trade.id}:`, ledgerErr?.message || ledgerErr);
+      }
+    } catch (err) {
+      // NEVER leave the client hanging in RESOLVING with no backend error — and
+      // never convert our own crash into the user's loss, which is what the old
+      // `status = 'LOST'` fallback here did.
+      console.error(`[Engine] lockResult ERROR for #${trade.id}:`, err?.message || err);
+      if (trade.status === 'PENDING') {
+        try {
+          parkForDispute('ENGINE_ERROR', err?.message || String(err));
+        } catch (err2) {
+          console.error(`[Engine] dispute parking ALSO failed for #${trade.id}:`, err2?.message || err2);
         }
-      } catch (err2) {
-        console.error(`[Engine] lockResult fallback ALSO failed for #${trade.id}:`, err2?.message || err2);
       }
     }
+  }
+
+  // ── Settlement telemetry ────────────────────────────────────────────────
+  //
+  // "Are most trades settling?" was unanswerable, which is how a feed failure
+  // could quietly turn into a user's LOST stake for an unknown period of time
+  // with nothing counting it. Every terminal outcome is counted here so the
+  // success rate is a number rather than an impression.
+  //
+  // Counters are in-process, so they reset on deploy. That is enough to answer
+  // "is the current build settling trades, and how often does it fail", which is
+  // the question that matters when a change is live. A durable counter belongs in
+  // Redis if this ever needs to survive a restart.
+  _settlementStats() {
+    this._stats = this._stats || { settledWins: 0, settledLosses: 0, disputes: 0, byReason: {} };
+    return this._stats;
+  }
+
+  _noteSettled(won) {
+    const s = this._settlementStats();
+    if (won) s.settledWins++; else s.settledLosses++;
+  }
+
+  /**
+   * Deadline breaches are a platform failure by definition, so they are counted
+   * and surfaced rather than discovered by looking at a list.
+   */
+  _noteDispute(trade, reason) {
+    const s = this._settlementStats();
+    s.disputes++;
+    s.byReason[reason] = (s.byReason[reason] || 0) + 1;
+    console.error(
+      `[Engine] DISPUTES OPEN: ${s.disputes} total — ${JSON.stringify(s.byReason)} ` +
+      `(latest: #${trade.id} ${trade.userAddr})`
+    );
   }
 
   /**
@@ -371,6 +476,8 @@ class ClassicEngine {
       payout: payoutAmount,
       settledAt: Date.now()
     });
+    cache.resolveOpenTrade(trade.id);
+    cache.saveSessionSnapshot(trade.userAddr, cache.sessions.get(trade.userAddr)?.balance);
 
     this.settleCopyTrades(trade, payoutAmount);
 
@@ -688,8 +795,15 @@ class ClassicEngine {
     };
     cache.trades.set(trade.id, trade);
     await cache.pushHistory(userAddr, trade);
+    // Register in the durable open-trade set. cache.trades is in-memory, so this
+    // is the only record that survives a restart and lets the settlement engine
+    // pick this bet back up if the process dies before it resolves.
+    cache.registerOpenTrade(trade);
     // Attach the tx hash to the claim row for audit and reconciler lookups.
     profiles.recordBetResult(trade.id, { stake_tx_hash: realHash, symbol });
+    // Shared balance snapshot, so a cold instance (or a different device) can be
+    // served the same number without waiting on a chain read.
+    cache.saveSessionSnapshot(userAddr, session.balance);
 
     this.io.to(userAddr).emit('balance_update', {
       balance: String(session.balance),
@@ -774,6 +888,8 @@ class ClassicEngine {
       exitPrice: trade.lockedExitPrice,
       settledAt: Date.now()
     });
+    cache.resolveOpenTrade(trade.id);
+    cache.saveSessionSnapshot(trade.userAddr, cache.sessions.get(trade.userAddr)?.balance);
 
     this.settleCopyTrades(trade, 0);
 
@@ -870,6 +986,11 @@ class ClassicEngine {
     const MIN_TO_KEEP = 0.05;
     const MAX_RECLAIM = 50;
 
+    // The platform's own gas float, tracked in the reconciler. It is the ONLY
+    // money in a session wallet that belongs to us; everything above it is the
+    // user's trading balance.
+    const chainReconciler = require('./services/chainReconciler');
+
     for (const [userAddr, session] of cache.sessions.entries()) {
       if (!session || !session.wallet) continue;
       try {
@@ -885,10 +1006,45 @@ class ClassicEngine {
           }
         }
 
-        const reclaimable = Math.min(MAX_RECLAIM, Math.max(0, balNum - lockedAmount - MIN_TO_KEEP));
+        // ── SAFETY CAPS ────────────────────────────────────────────────────
+        // This used to reclaim `balNum - lockedAmount - MIN_TO_KEEP`, i.e.
+        // everything above the pending stakes. That is the user's trading
+        // balance: with no trade pending, a 30 USDC balance was swept whole to
+        // the operator wallet, every 5 minutes. The user's principal is not
+        // ours to take, so the sweep is now bounded by three things:
+        //
+        //   1. the gas float we actually put in (our money, and nothing more),
+        //   2. the headroom above locked stakes and the gas buffer,
+        //   3. the user's own ledger balance.
+        //
+        // Cap 1 fails CLOSED: if the float did not persist we recorded none, and
+        // we then take nothing rather than guessing. Cap 3 means we would rather
+        // leak a little gas than touch a balance, which is the correct direction
+        // to be wrong in.
+        const gasFloatOwed = chainReconciler.getGasFloatOwed(userAddr);
+        const userPrincipal = Number(session.balance || 0);
+        const headroom = balNum - lockedAmount - MIN_TO_KEEP;
+
+        const reclaimable = Math.max(0, Math.min(
+          MAX_RECLAIM,
+          gasFloatOwed,
+          headroom,
+          isFinite(userPrincipal) ? userPrincipal : 0
+        ));
         if (reclaimable < 0.01) continue;
 
-        console.log(`[Reclaim] ${session.wallet.address.slice(0, 10)}... has ${balNum} ARC, reclaiming ${reclaimable}`);
+        // Refuse rather than sweep a balance we cannot reconcile. If the float
+        // exceeds what the user actually has, the accounting has drifted and
+        // taking our full number would come out of their funds.
+        if (gasFloatOwed > balNum + 0.01) {
+          console.warn(
+            `[Reclaim] SKIPPED ${userAddr.slice(0, 10)}...: gas float ${gasFloatOwed} exceeds ` +
+            `on-chain ${balNum} — accounting drifted, not touching the balance`
+          );
+          continue;
+        }
+
+        console.log(`[Reclaim] ${session.wallet.address.slice(0, 10)}... has ${balNum} ARC, reclaiming ${reclaimable} of our gas float`);
 
         const nonce = await rpc.getNonce(session.wallet.address);
         const txResponse = await rpc.broadcastWithFailover(
@@ -903,6 +1059,9 @@ class ClassicEngine {
           }
         );
         await rpc.waitForReceipt(txResponse.hash);
+        // Only now is the money actually back with us. Recording the reclaim is
+        // what stops the next pass from taking the same float again.
+        chainReconciler.recordGasReclaim(userAddr, reclaimable);
         console.log(`[Reclaim] Reclaimed ${reclaimable} ARC from ${session.wallet.address.slice(0, 10)}`);
       } catch (e) {
         // Skip this wallet on error, move on

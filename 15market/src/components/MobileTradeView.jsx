@@ -5,7 +5,7 @@ import { priceSocketService } from '../utils/priceSocket';
 import { KEEPER_URL_ARC } from '../constants';
 import { GlobalTradeScroller } from './GlobalTradeScroller';
 import { FlipClock, ProgressBeam, ResolvingOutcome, TradeOutcome } from './TradingWidget';
-import { isTradeSettled, isTradeInFlight, isWinningTrade } from '../utils/tradeStatus';
+import { isTradeSettled, isTradeInFlight, isTradeOverdue, isWinningTrade } from '../utils/tradeStatus';
 
 const LOGO_MAP = {
   eth: '/ethusdc.png',
@@ -872,11 +872,16 @@ export default function MobileTradeView({
 
   const currentStake = parseFloat(stakeInput) || 0;
 
-  // Find the current active trade (PENDING or RESOLVING)
+  // Find the current active trade (PENDING or RESOLVING), EXCLUDING one the
+  // backend has already failed to settle. An overdue trade stops driving the
+  // countdown so the controls return, but it is still in `activeTrades` and
+  // still renders as PENDING in the history - it is never given a verdict here.
   const currentActiveTrade = useMemo(() => {
     if (!activeTrades || activeTrades.length === 0) return null;
-    return activeTrades.find(t => ['PENDING', 'RESOLVING'].includes(t.status)) || null;
-  }, [activeTrades]);
+    const live = activeTrades.find(t => ['PENDING', 'RESOLVING'].includes(t.status)) || null;
+    if (!live) return null;
+    return isTradeOverdue(live, nowTick) ? null : live;
+  }, [activeTrades, nowTick]);
 
   // Track settled trade for outcome display
   const [settledTrade, setSettledTrade] = useState(null);
@@ -890,21 +895,27 @@ export default function MobileTradeView({
   const [remainingSec, setRemainingSec] = useState(0);
   const [tradeProgress, setTradeProgress] = useState(0);
 
-  // Safety: if buttons are stuck (trade never resolves), force clear after duration + 30s
+  // Safety: a trade the backend has failed to settle must never hold the widget
+  // hostage.
+  //
+  // This used to try to self-heal by writing TIMEOUT back into the parent's
+  // trade list via setActiveTrades - a prop this component is never given (it
+  // only receives the `activeTrades` array). The timer callback therefore threw
+  // a ReferenceError, the safety net never fired, and the trade stayed PENDING
+  // forever. Because isTradeActive keys off currentActiveTrade, the trading
+  // controls were never restored: the widget was simply unusable, with nothing
+  // on screen to say why.
+  //
+  // A child must not mutate the parent's list, so instead the decision is made
+  // here: once the grace window passes, the trade stops driving the countdown
+  // and the controls come back. The trade itself is untouched and stays PENDING
+  // in the history - an unsettled trade is never turned into a win or a loss
+  // here, it waits for a real verdict or for an admin to clear it in disputes.
+  const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
-    if (!currentActiveTrade) return;
-    const duration = currentActiveTrade.duration || 15;
-    const startTime = currentActiveTrade.startTime || currentActiveTrade.timestamp || Date.now();
-    const timeoutMs = (duration + 30) * 1000;
-    const timer = setTimeout(() => {
-      setActiveTrades(prev => prev.map(t =>
-        ['PENDING', 'RESOLVING'].includes(t.status)
-          ? { ...t, status: 'TIMEOUT', won: undefined, payout: '0.00' }
-          : t
-      ));
-    }, timeoutMs);
-    return () => clearTimeout(timer);
-  }, [currentActiveTrade?.id]);
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Display each authoritative settlement once.
   // Uses refs for timer to avoid cleanup issues from changing deps.

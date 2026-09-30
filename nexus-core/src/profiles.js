@@ -87,15 +87,46 @@ function tradeToSupabaseRow(address, trade) {
     };
 }
 
+// The `trades` table is a mixed ledger: real bets AND funding rows. A deposit
+// writes a row with type 'DEPOSIT' and status 'CONFIRMED' (see POST /fund/confirm
+// and the chain reconciler's auto-credit), and copy-trade bookkeeping lands here
+// too. None of those are bets, but they were returned by getHistoryAsync as if
+// they were, so the client rendered them in the trade history labelled
+// CONFIRMED - which reads as "a trade that is somehow already settled" when it
+// is really a deposit receipt. Worse, CONFIRMED is not a settled bet status, so
+// tapping one opened the "still processing" disclaimer.
+//
+// Funding rows are filtered out of bet history entirely. They stay in the table
+// and in the transaction/deposit views, which is where they belong; they are
+// simply not trades and must never be presented as one.
+const FUNDING_ROW_TYPES = new Set(['DEPOSIT', 'FUNDING', 'CREDIT', 'TOPUP', 'TOP_UP']);
+
+function isBetRecord(trade) {
+    if (!trade) return false;
+    const type = String(trade.type || '').toUpperCase();
+    if (type && FUNDING_ROW_TYPES.has(type)) return false;
+    // A synthetic DEPOSIT-<txhash> id is a funding row even when the type column
+    // was never persisted.
+    if (/^DEPOSIT-/i.test(String(trade.id || trade.betId || ''))) return false;
+    // Funding rows carry no market. A real bet always does.
+    if (!trade.symbol) return false;
+    return true;
+}
+
 function tradeStatusRank(status) {
     return {
         PENDING: 1,
         RESOLVING: 2,
-        WON: 3,
-        LOST: 3,
-        PAID: 4,
-        PAYOUT_FAILED: 4,
-        CANCELLED: 4
+        // DISPUTE is a decided-to-be-undecided state: the platform has given up
+        // on deciding it automatically and is waiting for an admin. It must rank
+        // ABOVE the in-flight states or a stale PENDING copy of the same bet
+        // would win the merge and quietly undo the dispute.
+        DISPUTE: 3,
+        WON: 4,
+        LOST: 4,
+        PAID: 5,
+        PAYOUT_FAILED: 5,
+        CANCELLED: 5
     }[status] || 0;
 }
 
@@ -704,10 +735,12 @@ class ProfileService {
             const rows = await res.json();
             const byId = new Map();
             for (const trade of (rows || []).map(supabaseTradeToRecord)) {
+                if (!isBetRecord(trade)) continue;
                 const key = String(trade.id || trade.betId || '');
                 if (key) byId.set(key, trade);
             }
             for (const trade of this.getHistory(addr)) {
+                if (!isBetRecord(trade)) continue;
                 const key = String(trade.id || trade.betId || '');
                 if (!key) continue;
                 const remote = byId.get(key);
@@ -734,7 +767,83 @@ class ProfileService {
     }
 
     /**
-     * Every trade still awaiting a verdict, across all users.
+     * Move a bet to a real terminal status without deleting the row.
+     *
+     * The audit trail is the point: these rows are the only evidence of what
+     * happened to a user's stake, and of why a trade got stuck. Deleting them
+     * would destroy that AND leave the debited stake unreturned, so the user
+     * loses the money and the record at once.
+     *
+     * Updates the in-memory record, the local snapshot and Supabase. payout is
+     * forced to 0 because the client treats any settled row with a non-zero
+     * payout as a win, and a voided trade is not a win.
+     *
+     * @returns {Promise<boolean>} false if the row could not be located
+     */
+    async markTradeResolved(betId, userAddress, { status = 'CANCELLED', reason = 'admin-resolved' } = {}) {
+        const id = String(betId || '');
+        if (!id) return false;
+
+        // Prefer the address that owns the row; fall back to scanning so an
+        // operator does not have to know it.
+        let addr = String(userAddress || '').toLowerCase();
+        const findIn = (a) => {
+            const trades = this.profiles[a]?.trades;
+            if (!Array.isArray(trades)) return null;
+            return trades.find(t => String(t.id || t.betId || '') === id) || null;
+        };
+        let trade = addr ? findIn(addr) : null;
+        if (!trade) {
+            for (const a of Object.keys(this.profiles || {})) {
+                const hit = findIn(a);
+                if (hit) { trade = hit; addr = a; break; }
+            }
+        }
+        if (!trade) return false;
+
+        Object.assign(trade, {
+            status,
+            won: false,
+            payout: 0,
+            settledAt: Date.now(),
+            resolutionReason: reason
+        });
+        this.saveToFile();
+
+        if (SUPABASE_ENABLED) {
+            try {
+                await this.initSupabase();
+                if (this.sbTradeTableAvailable) {
+                    const res = await supabaseRequest(
+                        `/rest/v1/trades?id=eq.${encodeURIComponent(id)}`,
+                        {
+                            method: 'PATCH',
+                            headers: { Prefer: 'return=minimal' },
+                            body: JSON.stringify({
+                                status,
+                                won: false,
+                                payout: 0,
+                                settled_at: Date.now()
+                            })
+                        }
+                    );
+                    if (!res.ok) {
+                        console.warn(`[Profiles] markTradeResolved DB update failed for ${id}: ${res.status}`);
+                        return false;
+                    }
+                }
+            } catch (e) {
+                console.warn(`[Profiles] markTradeResolved DB error for ${id}:`, e.message);
+                return false;
+            }
+        }
+        console.log(`[Profiles] Trade ${id} for ${addr} resolved as ${status} (${reason})`);
+        return true;
+    }
+
+    /**
+     * Money the platform still owes a user.
+     *
      *
      * cache.trades is in-memory, so a restart orphans any trade that was open
      * at the time: the monitor never sees it and the client polls a PENDING row
@@ -742,21 +851,112 @@ class ProfileService {
      * are placed, so this is the record used to put those orphans back.
      */
     async getUnsettledTradesAsync() {
-        if (!SUPABASE_ENABLED) return [];
         await this.initSupabase();
-        if (!this.sbTradeTableAvailable) return [];
+
+        // ── Durable fallback: Redis, then the local snapshot ───────────────
+        // Returning [] here used to be the single worst line in the settlement
+        // path. cache.trades is in-memory, so the ONLY way a trade that was open
+        // at shutdown comes back is this function. When Supabase was
+        // unreachable it returned an empty list, which is indistinguishable from
+        // "there is nothing to recover" - so every open trade was silently
+        // abandoned in the database and nothing could ever settle it. The user
+        // saw a permanently PENDING trade with no way out and no explanation.
+        //
+        // Redis is the primary fallback: it is shared across instances and
+        // survives a redeploy, so a Supabase outage degrades settlement to
+        // "slower", never to "stopped". The on-disk profile snapshot is the last
+        // resort for a cold start where Redis is also unreachable.
+        if (!SUPABASE_ENABLED || !this.sbTradeTableAvailable) {
+            const recovered = await this.recoverUnsettledFromFallbacks('Supabase unavailable');
+            return recovered;
+        }
+
         try {
             const res = await supabaseRequest(
                 '/rest/v1/trades?select=*&status=in.(PENDING,RESOLVING)&order=timestamp.asc&limit=500',
                 { timeout: 20000 }
             );
-            if (!res.ok) return [];
+            if (!res.ok) {
+                // A failed read must never look like "nothing to do".
+                console.warn(`[Recovery] Unsettled scan failed (${res.status}) — using fallbacks.`);
+                return this.recoverUnsettledFromFallbacks(`scan returned ${res.status}`);
+            }
             const rows = await res.json();
-            return (rows || []).map(supabaseTradeToRecord);
+            const remote = (rows || []).map(supabaseTradeToRecord);
+            // Merge the fallbacks too, so a trade whose write never landed is
+            // still recovered rather than lost between the stores.
+            return this.mergeUnsettled(remote, await this.collectUnsettledFallbacks());
         } catch (e) {
-            console.warn('[Supabase] Unsettled trade recovery failed:', e.message);
-            return [];
+            console.warn('[Supabase] Unsettled trade recovery failed:', e.message, '— using fallbacks.');
+            return this.recoverUnsettledFromFallbacks(e.message);
         }
+    }
+
+    // Redis open-trade registry first, then the local snapshot. Never throws.
+    async collectUnsettledFallbacks() {
+        const out = [];
+        try {
+            const cache = require('../cache');
+            const open = await cache.listOpenTrades();
+            for (const t of open) {
+                const status = String(t.status || '').toUpperCase();
+                if (status !== 'PENDING' && status !== 'RESOLVING') continue;
+                if (!isBetRecord(t)) continue;
+                out.push({ ...t, recoverySource: 'redis' });
+            }
+        } catch (e) {
+            console.warn('[Recovery] Redis open-trade read failed:', e.message);
+        }
+        for (const t of this.getUnsettledFromMemory()) {
+            out.push({ ...t, recoverySource: 'snapshot' });
+        }
+        return out;
+    }
+
+    async recoverUnsettledFromFallbacks(why) {
+        const rows = await this.collectUnsettledFallbacks();
+        if (rows.length) {
+            console.warn(`[Recovery] ${why} — recovered ${rows.length} unsettled trade(s) from durable storage.`);
+        }
+        return rows;
+    }
+
+    // Union by bet id, remote first. Only PENDING/RESOLVING qualify: a DISPUTE
+    // trade is waiting on an admin, so handing it back to the automatic settler
+    // would only spin it.
+    mergeUnsettled(remote, fallbacks) {
+        const byId = new Map();
+        for (const t of remote) {
+            const key = String(t.id || t.betId || '');
+            const status = String(t.status || '').toUpperCase();
+            if (key && (status === 'PENDING' || status === 'RESOLVING')) byId.set(key, t);
+        }
+        for (const t of fallbacks) {
+            const key = String(t.id || t.betId || '');
+            if (key && !byId.has(key)) byId.set(key, t);
+        }
+        return Array.from(byId.values());
+    }
+
+    // Unsettled bets held in the in-memory / on-disk profile snapshot. Same
+    // eligibility as the SQL scan, so the two sources are interchangeable.
+    getUnsettledFromMemory() {
+        const out = [];
+        const seen = new Set();
+        for (const addr of Object.keys(this.profiles || {})) {
+            const trades = this.profiles[addr]?.trades;
+            if (!Array.isArray(trades)) continue;
+            for (const t of trades) {
+                if (!t || !isBetRecord(t)) continue;
+                const status = String(t.status || '').toUpperCase();
+                if (status !== 'PENDING' && status !== 'RESOLVING') continue;
+                const key = String(t.id || t.betId || '');
+                if (!key || seen.has(key)) continue;
+                seen.add(key);
+                out.push({ ...t, userAddr: t.userAddr || addr });
+            }
+        }
+        return out;
     }
 
     async persistTradeToSupabase(address, trade, skipInit = false) {

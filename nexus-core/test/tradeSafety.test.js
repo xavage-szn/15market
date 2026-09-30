@@ -301,6 +301,278 @@ function makeResponse(status, body) {
     });
   });
 
+  // ── Idle-fund sweep must never touch user principal ───────────────────────
+  //
+  // _reclaimIdleSessionArc() runs every 5 minutes over every live session
+  // wallet. It used to sweep `onChain - lockedStakes - buffer`, which is the
+  // user's trading balance whenever no trade is pending, so a 30 USDC balance
+  // was taken whole and sent to the operator wallet. The sweep is now bounded by
+  // the platform's own recorded gas float, and the reclaim is recorded so a
+  // second pass cannot take the same money again.
+  //
+  // The reclaim formula is asserted here directly rather than by driving the
+  // 5-minute timer, so a regression is caught without a live chain.
+
+  const reclaim = require('../src/services/chainReconciler');
+
+  // Mirror of the caps in classic.js _reclaimIdleSessionArc.
+  function reclaimableAmount({ onChain, lockedStakes, gasFloatOwed, userBalance }) {
+    const MIN_TO_KEEP = 0.05;
+    const MAX_RECLAIM = 50;
+    if (onChain <= MIN_TO_KEEP) return 0;
+    if (gasFloatOwed > onChain + 0.01) return 0; // drifted: refuse
+    const headroom = onChain - lockedStakes - MIN_TO_KEEP;
+    return Math.max(0, Math.min(
+      MAX_RECLAIM, gasFloatOwed, headroom, Number.isFinite(userBalance) ? userBalance : 0
+    ));
+  }
+
+  test('a user balance is never swept when the platform funded no gas', () => {
+    // The reported symptom: 30 USDC on-chain, 5 USDC in the ledger.
+    assert.strictEqual(
+      reclaimableAmount({ onChain: 30, lockedStakes: 0, gasFloatOwed: 0, userBalance: 5 }),
+      0,
+      'no gas float recorded means we take nothing'
+    );
+  });
+
+  test('a user balance is never swept even with a large recorded float', () => {
+    // Only the float is reclaimable; the 25 USDC of principal stays put.
+    const got = reclaimableAmount({ onChain: 30, lockedStakes: 0, gasFloatOwed: 5, userBalance: 25 });
+    assert.ok(got <= 5, `swept ${got}, above the 5 USDC float`);
+  });
+
+  test('pending stakes are never swept', () => {
+    const got = reclaimableAmount({ onChain: 30, lockedStakes: 20, gasFloatOwed: 10, userBalance: 30 });
+    assert.ok(got <= 9.95, `swept ${got}, into the 20 USDC of pending stakes`);
+  });
+
+  test('a drifted float larger than the wallet is refused outright', () => {
+    assert.strictEqual(
+      reclaimableAmount({ onChain: 3, lockedStakes: 0, gasFloatOwed: 12, userBalance: 3 }),
+      0,
+      'a float bigger than the wallet means the accounting drifted'
+    );
+  });
+
+  test('a repeat sweep takes nothing once the float is fully reclaimed', () => {
+    // The ratchet: gasOwed is only ever raised by recordGasFunding, so without
+    // recording the reclaim the next 5-minute pass takes the same money again.
+    let gasOwed = 4;
+    const sweep = () => reclaimableAmount({ onChain: 30, lockedStakes: 0, gasFloatOwed: gasOwed, userBalance: 26 });
+    const first = sweep();
+    assert.ok(first > 0, 'the first sweep must recover the float');
+    gasOwed = Math.max(0, gasOwed - first); // recordGasReclaim
+    assert.strictEqual(sweep(), 0, 'a second sweep took the float twice');
+  });
+
+  await testAsync('recordGasReclaim floors the float at zero', async () => {
+    const addr = '0xabc0000000000000000000000000000000000009';
+    const realUpsert = profiles.upsert;
+    const store = {};
+    try {
+      profiles.upsert = (a, patch) => { store[a.toLowerCase()] = { ...(store[a.toLowerCase()] || {}), ...patch }; };
+      profiles.get = (a) => store[a.toLowerCase()] || null;
+      reclaim.__setDeps({ profiles });
+
+      reclaim.recordGasFunding(addr, '5000000000000000000'); // 5 USDC (1e18 each)
+      assert.strictEqual(reclaim.getGasFloatOwed(addr), 5, 'float recorded');
+
+      reclaim.recordGasReclaim(addr, 5);
+      assert.strictEqual(reclaim.getGasFloatOwed(addr), 0, 'float cleared after full reclaim');
+
+      // An over-reported reclaim must not go negative, or a later sweep would be
+      // authorised against gas we already took back.
+      reclaim.recordGasFunding(addr, '2000000000000000000'); // 2 USDC
+      reclaim.recordGasReclaim(addr, 99);
+      assert.strictEqual(reclaim.getGasFloatOwed(addr), 0, 'float never goes negative');
+    } finally {
+      profiles.upsert = realUpsert;
+      reclaim.__reset();
+    }
+  });
+
+  // ── Undecidable trades are disputed, never settled as a loss ─────────────
+  //
+  // lockResult used to declare a LOST verdict whenever the exit price was
+  // nonsense (`validExit` false) and on ANY exception. A price-feed gap therefore
+  // silently cost the user their entire stake, with our failure billed to them
+  // as a market result. It is now parked in DISPUTE: stake held, no verdict,
+  // visible for an admin.
+  //
+  // The other half matters just as much — a trade with a usable entry and exit
+  // price must still settle automatically with no human involved, or this whole
+  // change would have quietly broken normal trading.
+
+  const engineProto = ClassicEngine.prototype;
+
+  function lockCtx(overrides = {}) {
+    const ctx = Object.create(engineProto);
+    ctx.io = { emit: () => {}, to: () => ({ emit: () => {} }) };
+    ctx.syncBalance = () => {};
+    ctx._noteDispute = () => {};
+    ctx.settleOnChainBackground = () => {};
+    ctx.creditWinner = function (t) { t.status = 'WON'; };
+    ctx.settleTradeLocally = function (t) { t.status = 'LOST'; };
+    return Object.assign(ctx, overrides);
+  }
+
+  test('a trade with a valid exit still settles automatically', () => {
+    withStubbedCache(() => {
+      const ctx = lockCtx();
+      const trade = {
+        id: '900', userAddr: USER, amount: 5, symbol: 'eth', direction: 1,
+        entryPrice: 100, duration: 15, status: 'PENDING'
+      };
+      // Entry 100, exit 110, direction UP -> a win.
+      ctx.captureExitPrice = () => 110;
+      engineProto.lockResult.call(ctx, trade);
+      assert.strictEqual(trade.status, 'WON', 'a valid win must settle with no admin involved');
+      assert.strictEqual(trade.lockedExitPrice, 110, 'the exit price is locked');
+      assert.strictEqual(trade.lockedWon, true, 'the verdict is locked');
+    });
+  });
+
+  test('a valid loss still settles automatically', () => {
+    withStubbedCache(() => {
+      const ctx = lockCtx();
+      const trade = {
+        id: '901', userAddr: USER, amount: 5, symbol: 'eth', direction: 1,
+        entryPrice: 100, duration: 15, status: 'PENDING'
+      };
+      ctx.captureExitPrice = () => 90; // DOWN from entry on an UP trade
+      engineProto.lockResult.call(ctx, trade);
+      assert.strictEqual(trade.status, 'LOST', 'a valid loss must settle with no admin involved');
+      assert.strictEqual(trade.lockedWon, false, 'the verdict is locked');
+    });
+  });
+
+  test('an invalid exit price is DISPUTED, not silently lost', () => {
+    withStubbedCache(() => {
+      const ctx = lockCtx();
+      const trade = {
+        id: '902', userAddr: USER, amount: 5, symbol: 'eth', direction: 1,
+        entryPrice: 100, duration: 15, status: 'PENDING'
+      };
+      // Feed down: no price at all. This used to be a LOST verdict.
+      ctx.captureExitPrice = () => 0;
+      engineProto.lockResult.call(ctx, trade);
+      assert.strictEqual(trade.status, 'DISPUTE', 'a feed failure must not become a loss');
+      assert.strictEqual(trade.lockedWon, undefined, 'no verdict may be invented');
+      assert.strictEqual(trade.lockedExitPrice, undefined, 'no exit price may be invented');
+      assert.strictEqual(trade.settledAt, undefined, 'a disputed trade is not settled');
+      assert.strictEqual(trade.disputeReason, 'INVALID_EXIT_PRICE', 'the reason is recorded');
+    });
+  });
+
+  test('an engine error is DISPUTED, not silently lost', () => {
+    withStubbedCache(() => {
+      const ctx = lockCtx();
+      const trade = {
+        id: '903', userAddr: USER, amount: 5, symbol: 'eth', direction: 1,
+        entryPrice: 100, duration: 15, status: 'PENDING'
+      };
+      ctx.captureExitPrice = () => { throw new Error('boom'); };
+      engineProto.lockResult.call(ctx, trade);
+      assert.strictEqual(trade.status, 'DISPUTE', 'our own crash must not cost the user their stake');
+      assert.strictEqual(trade.disputeReason, 'ENGINE_ERROR', 'the reason is recorded');
+    });
+  });
+
+  test('an invalid direction is DISPUTED', () => {
+    withStubbedCache(() => {
+      const ctx = lockCtx();
+      const trade = {
+        id: '904', userAddr: USER, amount: 5, symbol: 'eth', direction: 'sideways',
+        entryPrice: 100, duration: 15, status: 'PENDING'
+      };
+      ctx.captureExitPrice = () => 110;
+      engineProto.lockResult.call(ctx, trade);
+      assert.strictEqual(trade.status, 'DISPUTE', 'an undecidable direction must not be guessed');
+      assert.strictEqual(trade.disputeReason, 'INVALID_DIRECTION', 'the reason is recorded');
+    });
+  });
+
+  test('a disputed trade is not re-settled by a later sweep', () => {
+    withStubbedCache(() => {
+      const ctx = lockCtx();
+      const trade = {
+        id: '905', userAddr: USER, amount: 5, symbol: 'eth', direction: 1,
+        entryPrice: 100, duration: 15, status: 'PENDING'
+      };
+      ctx.captureExitPrice = () => 0;
+      engineProto.lockResult.call(ctx, trade);
+      assert.strictEqual(trade.status, 'DISPUTE');
+
+      // The 3s recovery sweep only touches PENDING, and lockResult re-checks
+      // the status, so a dispute must stay put instead of being re-decided.
+      ctx.captureExitPrice = () => 110;
+      engineProto.lockResult.call(ctx, trade);
+      assert.strictEqual(trade.status, 'DISPUTE', 'a dispute must not be overwritten by a later pass');
+    });
+  });
+
+  // ── Clearing stuck trades must void them, never delete them ──────────────
+  //
+  // The stake is debited when a trade is placed, so removing the row would take
+  // the user's money AND the only record that the trade existed — including the
+  // evidence needed to work out why it got stuck. markTradeResolved moves the row
+  // to a real terminal status instead.
+  //
+  // payout must be forced to 0: the client treats any settled row with a
+  // non-zero payout as a win, and a voided trade is not a win.
+
+  test('markTradeResolved voids a stuck trade without deleting the row', async () => {
+    const addr = '0xabc000000000000000000000000000000000000a';
+    const realGetAll = profiles.getAll;
+    const realSave = profiles.saveToFile;
+    const store = {
+      [addr]: {
+        address: addr,
+        trades: [
+          { id: '7001', symbol: 'ETH', amount: 5, status: 'PENDING', won: false, payout: 0 },
+          { id: '7002', symbol: 'BTC', amount: 3, status: 'LOST', won: false, payout: 0 }
+        ]
+      }
+    };
+    try {
+      profiles.getAll = () => store;
+      profiles.saveToFile = () => {};
+
+      const ok = await profiles.markTradeResolved('7001', addr, { status: 'CANCELLED', reason: 'stuck' });
+      assert.strictEqual(ok, true, 'the row must be resolvable');
+
+      const t = store[addr].trades.find(x => x.id === '7001');
+      assert.ok(t, 'the row must still exist — deleting it is what we are avoiding');
+      assert.strictEqual(t.status, 'CANCELLED', 'moved to a real terminal status');
+      assert.strictEqual(t.payout, 0, 'payout forced to 0 so it is not read as a win');
+      assert.strictEqual(t.won, false, 'never marked as a win');
+      assert.strictEqual(t.amount, 5, 'the stake is still on the record');
+
+      // An already-settled trade is left alone.
+      const other = store[addr].trades.find(x => x.id === '7002');
+      assert.strictEqual(other.status, 'LOST', 'a settled trade must not be rewritten');
+    } finally {
+      profiles.getAll = realGetAll;
+      profiles.saveToFile = realSave;
+    }
+  });
+
+  test('markTradeResolved refuses an unknown bet id rather than inventing one', async () => {
+    const addr = '0xabc000000000000000000000000000000000000b';
+    const realGetAll = profiles.getAll;
+    const realSave = profiles.saveToFile;
+    try {
+      profiles.getAll = () => ({ [addr]: { address: addr, trades: [] } });
+      profiles.saveToFile = () => {};
+      const ok = await profiles.markTradeResolved('does-not-exist', addr, {});
+      assert.strictEqual(ok, false, 'an unknown id must not report success');
+    } finally {
+      profiles.getAll = realGetAll;
+      profiles.saveToFile = realSave;
+    }
+  });
+
   console.log(`\n${passed} passing, ${failed} failing\n`);
   if (failed) {
     for (const f of failures) console.log(`${f.name}\n${f.error.stack}\n`);

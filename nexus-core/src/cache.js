@@ -238,6 +238,130 @@ class Cache {
     } catch (e) {}
   }
 
+  // --- Redis Open-Trade Registry ---
+  //
+  // Every bet that has been broadcast but not yet given a final verdict.
+  //
+  // cache.trades is in-memory, so after a restart the settlement engine has no
+  // working set at all and the only way an open trade can come back is a durable
+  // store. That used to mean Supabase alone: if it was unreachable, recovery
+  // returned an empty list, which is indistinguishable from "nothing to do", and
+  // every open trade was silently abandoned with no way to ever settle it.
+  //
+  // Redis is the right tier for this. It is shared across instances (so a deploy
+  // that replaces the process does not lose the set), it survives a restart, and
+  // unlike a local file it is not per-machine. A hash keyed by bet id keeps both
+  // operations idempotent: HSET overwrites, HDEL removes, HGETALL enumerates.
+
+  async registerOpenTrade(trade) {
+    try {
+      const id = String(trade?.id || trade?.betId || '');
+      if (!id) return false;
+      const r = getRedis();
+      await r.hset('15market:open-trades', id, JSON.stringify({
+        id,
+        userAddr: trade.userAddr,
+        symbol: trade.symbol,
+        amount: trade.amount,
+        direction: trade.direction,
+        entryPrice: trade.entryPrice,
+        duration: trade.duration,
+        settleAt: trade.settleAt,
+        timestamp: trade.timestamp || Date.now(),
+        status: trade.status || 'PENDING',
+        sessionAddress: trade.sessionAddress,
+        stakeTxHash: trade.stakeTxHash || null
+      }));
+      return true;
+    } catch (e) {
+      // Never throw upward: losing the registry must not block placing a trade.
+      console.warn('[Redis] registerOpenTrade failed:', e.message);
+      return false;
+    }
+  }
+
+  // A trade has reached a final state (settled, cancelled, or parked in dispute)
+  // and no longer needs the recovery sweep to find it.
+  async resolveOpenTrade(betId) {
+    try {
+      const id = String(betId || '');
+      if (!id) return;
+      await getRedis().hdel('15market:open-trades', id);
+    } catch (e) {}
+  }
+
+  // Everything currently awaiting a verdict. Entries are re-registered on every
+  // place, so this reflects the live working set.
+  async listOpenTrades() {
+    try {
+      const raw = await getRedis().hgetall('15market:open-trades');
+      return Object.entries(raw || {})
+        .map(([id, json]) => {
+          try {
+            return { ...JSON.parse(json), id };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(Boolean);
+    } catch (e) {
+      console.warn('[Redis] listOpenTrades failed:', e.message);
+      return [];
+    }
+  }
+
+  // Drop registry entries that are no longer awaiting a verdict. The settle path
+  // removes them inline; this is the backstop that stops the hash growing without
+  // bound if a removal was lost (e.g. the process died between settle and HDEL).
+  async pruneOpenTrades(isTerminal) {
+    try {
+      const rows = await this.listOpenTrades();
+      const stale = rows.filter(t => isTerminal(t));
+      if (!stale.length) return 0;
+      const r = getRedis();
+      const pipeline = r.pipeline();
+      for (const t of stale) pipeline.hdel('15market:open-trades', String(t.id));
+      await pipeline.exec();
+      return stale.length;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  // --- Redis Session Snapshot ---
+  //
+  // The last known good trading balance per user, so a cold instance can answer
+  // /session/balance immediately instead of waiting on a chain read. Deliberately
+  // NOT a client-side cache: localStorage is per-device, so a phone and a desktop
+  // would each show their own number and disagree until the next server response.
+  // One shared value, written by the server, is the only way two devices can be
+  // guaranteed to agree.
+
+  async saveSessionSnapshot(userAddr, balance) {
+    try {
+      const addr = String(userAddr || '').toLowerCase();
+      const bal = Number(balance);
+      if (!addr || !isFinite(bal) || bal < 0) return false;
+      await getRedis().set(`15market:session:${addr}:balance`, String(bal), 'EX', 86400);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async loadSessionSnapshot(userAddr) {
+    try {
+      const addr = String(userAddr || '').toLowerCase();
+      if (!addr) return null;
+      const raw = await getRedis().get(`15market:session:${addr}:balance`);
+      if (raw === null) return null;
+      const bal = parseFloat(raw);
+      return isFinite(bal) && bal >= 0 ? bal : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // --- Redis Chart History Caching ---
   // Persists chart price history across server restarts for all users.
 

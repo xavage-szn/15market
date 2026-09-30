@@ -39,6 +39,58 @@ const OddsEngine = require('./services/OddsEngine');
 const priceService = require('./services/priceService');
 const settlementPriceService = require('./services/settlementPriceService');
 const chainReconciler = require('./services/chainReconciler');
+const { requireAdminAuth, handleAdminLogin } = require('./security');
+
+/**
+ * GET /health/settlement
+ *
+ * "Are most trades settling?" needs an answer you can read, not an impression.
+ * The failure this exists to catch was silent: an unusable exit price used to be
+ * turned into a LOST verdict, so a price-feed gap quietly cost users their stake
+ * with nothing counting it.
+ *
+ * No auth and no PII — just aggregate counters, safe to poll. Counters are
+ * in-process and reset on deploy, which is exactly the window you care about
+ * when a change is live.
+ */
+app.get('/health/settlement', (req, res) => {
+  const s = classicEngine._settlementStats();
+  const decided = s.settledWins + s.settledLosses;
+  res.json({
+    ok: true,
+    settled: {
+      wins: s.settledWins,
+      losses: s.settledLosses,
+      total: decided,
+      // Share of decided trades that produced a real verdict. Disputes are
+      // excluded on purpose: they are the platform failing, not the market.
+      autoSettledRate: decided > 0 ? Number(((decided / (decided + s.disputes)) * 100).toFixed(2)) : null
+    },
+    disputes: {
+      total: s.disputes,
+      byReason: s.byReason,
+      // Anything above zero means users are waiting on a human.
+      note: s.disputes > 0
+        ? 'Users are blocked on these until an admin resolves them.'
+        : 'none open'
+    },
+    liveTradesInMemory: cache.trades.size,
+    openTradeRegistry: 'see logs for recovered counts',
+    sinceProcessStart: true
+  });
+});
+
+/**
+ * POST /admin/login
+ *
+ * Exchanges the operator credentials for a short-lived bearer token. This is the
+ * missing link: generateAdminToken and requireAdminAuth both existed, but nothing
+ * ever issued a token, so every admin endpoint was unreachable in practice.
+ *
+ * The secret stays server-side. A shared secret in the admin frontend would be
+ * inlined into the public JS bundle and readable by anyone who opens the site.
+ */
+app.post('/admin/login', handleAdminLogin);
 
 // --- DYNAMICALLY DERIVED SOLANA RELAYER ADDRESS ---
 let derivedSolanaRelayerAddress = '11111111111111111111111111111111'; // default fallback
@@ -231,6 +283,18 @@ async function recoverUnsettledTrades() {
 
 recoverUnsettledTrades();
 setInterval(recoverUnsettledTrades, 60000); // Safety net for late writes
+
+// Keep the durable open-trade registry from growing without bound. The settle
+// paths remove their own entries inline; this is the backstop for the case where
+// that removal was lost (process died between settling and the HDEL), which would
+// otherwise leave a settled bet in the recovery set forever.
+const TERMINAL_TRADE_STATUSES = ['WON', 'LOST', 'PAID', 'CANCELLED', 'PAYOUT_FAILED', 'DISPUTE'];
+setInterval(async () => {
+    const pruned = await cache.pruneOpenTrades(
+        (t) => TERMINAL_TRADE_STATUSES.includes(String(t.status || '').toUpperCase())
+    );
+    if (pruned) console.log(`[Recovery] Pruned ${pruned} settled trade(s) from the open-trade registry.`);
+}, 300000);
 
 // Initialize Odds Engine
 const oddsEngine = new OddsEngine(io, redis);
@@ -704,8 +768,20 @@ app.get('/session/balance/:address', async (req, res) => {
         profiles.upsert(userAddr, { balance: session.balance });
       }
     } else {
-      // No in-memory session — rebuild from profile (survives restarts)
-      const restoredBalance = profileBal;
+      // No in-memory session — a cold instance. Rebuild from the shared Redis
+      // snapshot first, then the persisted profile.
+      //
+      // This is what lets the client drop its localStorage balance cache: there
+      // is ONE server-side value, so every device is served the same number.
+      // A device-local cache cannot do that, and a stale per-device value is
+      // exactly what made the mobile balance look stuck while desktop looked
+      // fine. Redis also means a freshly deployed instance answers immediately
+      // instead of waiting on a chain read.
+      const snapshot = await cache.loadSessionSnapshot(userAddr);
+      const restoredBalance = snapshot != null ? snapshot : profileBal;
+      if (snapshot != null) {
+        console.log(`[Balance] ${userAddr.slice(0, 10)}... served from the Redis snapshot: ${snapshot}`);
+      }
       cache.getOrCreateSession(userAddr, {
         identityKey: userAddr,
         walletAddress: userAddr,
@@ -1859,6 +1935,161 @@ app.get('/admin/stats', (req, res) => {
     pendingDisputes: 0,
     totalWallets: Object.keys(profiles.profiles).length
   });
+});
+
+/**
+ * POST /admin/trades/resolve-stuck
+ *
+ * Clears trades the platform abandoned: rows still marked PENDING/RESOLVING long
+ * after their countdown should have ended.
+ *
+ * Why an endpoint and not a DELETE
+ * --------------------------------
+ * Deleting these rows is the wrong tool and makes things worse. The stake was
+ * debited from the user's balance when the trade was placed, so removing the row
+ * does not return it - the user loses the money AND the only record that it ever
+ * existed, which is also the evidence needed to work out why it got stuck. So
+ * this UPDATES the row to a real terminal status and leaves the audit trail
+ * intact.
+ *
+ * Status choice: CANCELLED. It is already a settled status, so the client stops
+ * showing the "still processing" disclaimer and renders a real card, and it
+ * accurately says the bet was voided rather than won or lost. DISPUTE would be
+ * wrong here - that status means "waiting for an admin", which is exactly the
+ * stuck state we are clearing, and it would leave the user blocked.
+ *
+ * payout is set to 0 on purpose. The frontend treats any settled row with a
+ * non-zero payout as a win, and a refunded stake is not a win.
+ *
+ * Safety
+ * ------
+ *  - dry run unless `apply: true` is passed, so the default call changes nothing
+ *  - `refund` is a SEPARATE opt-in: marking a row resolved does not return the
+ *    stake, so the two decisions are never silently coupled
+ *  - anything still in the live in-memory working set or the Redis open-trade
+ *    registry is skipped, so a trade that is genuinely mid-flight is never voided
+ *  - `olderThanMinutes` defaults to 10, comfortably past any 15s/5s trade
+ *  - idempotent: only PENDING/RESOLVING rows are selected, so a re-run is a no-op
+ *
+ * Body: { apply?: boolean, refund?: boolean, olderThanMinutes?: number, reason?: string }
+ */
+app.post('/admin/trades/resolve-stuck', requireAdminAuth, async (req, res) => {
+  const apply = req.body?.apply === true;
+  const refund = req.body?.refund === true;
+  const olderThanMinutes = Math.max(1, Number(req.body?.olderThanMinutes) || 10);
+  const reason = String(req.body?.reason || 'admin-resolved-stuck').slice(0, 120);
+  const cutoff = Date.now() - olderThanMinutes * 60 * 1000;
+
+  try {
+    const rows = await profiles.getUnsettledTradesAsync();
+    if (!rows.length) {
+      return res.json({ ok: true, apply, refund, scanned: 0, resolved: 0, note: 'No unsettled trades found.' });
+    }
+
+    // Never void a trade that is actually alive. The in-memory working set and
+    // the Redis registry are the two records of a genuinely in-flight bet.
+    const live = new Set();
+    for (const t of cache.trades.values()) live.add(String(t.id));
+    try {
+      for (const t of await cache.listOpenTrades()) live.add(String(t.id));
+    } catch (e) {
+      console.warn('[ResolveStuck] Redis open-trade read failed:', e.message);
+    }
+
+    const candidates = [];
+    const skipped = [];
+    for (const t of rows) {
+      const id = String(t.id || t.betId || '');
+      if (!id) continue;
+      if (live.has(id)) { skipped.push({ id, why: 'live in working set / open-trade registry' }); continue; }
+      const ts = Number(t.timestamp || t.createdAt || 0);
+      // Timestamps arrive as seconds from the DB and ms from local rows.
+      const tsMs = ts > 1e12 ? ts : ts * 1000;
+      if (tsMs && tsMs > cutoff) { skipped.push({ id, why: 'still inside the safety window' }); continue; }
+      candidates.push(t);
+    }
+
+    const summary = {
+      ok: true,
+      apply,
+      refund,
+      olderThanMinutes,
+      scanned: rows.length,
+      eligible: candidates.length,
+      skippedLive: skipped.length,
+      resolved: 0,
+      refundedTotal: 0,
+      resolvedIds: [],
+      failures: [],
+      skipped: skipped.slice(0, 25)
+    };
+
+    if (!apply) {
+      summary.note = 'DRY RUN — nothing was changed. Re-run with { apply: true } to clear these.';
+      summary.wouldResolve = candidates.map(t => ({
+        id: String(t.id || t.betId || ''),
+        user: String(t.userAddr || t.user_address || '').slice(0, 12),
+        amount: Number(t.amount || 0),
+        status: t.status,
+        ageMinutes: Math.round((Date.now() - (Number(t.timestamp || 0) > 1e12 ? Number(t.timestamp) : Number(t.timestamp || 0) * 1000)) / 60000)
+      }));
+      return res.json(summary);
+    }
+
+    for (const t of candidates) {
+      const id = String(t.id || t.betId || '');
+      const addr = String(t.userAddr || t.user_address || '').toLowerCase();
+      const amount = Number(t.amount || 0);
+      try {
+        if (refund && amount > 0 && addr) {
+          const credit = await fundingService.creditTradingWallet(addr, amount, null);
+          if (!credit?.success) {
+            summary.failures.push({ id, stage: 'refund', error: credit?.error || 'refund refused' });
+            continue;   // leave the row PENDING rather than resolve a stake we did not return
+          }
+          summary.refundedTotal = Number((summary.refundedTotal + amount).toFixed(6));
+        }
+
+        const updated = await profiles.markTradeResolved(id, addr, {
+          status: 'CANCELLED',
+          reason
+        });
+        if (!updated) {
+          summary.failures.push({ id, stage: 'persist', error: 'row update failed' });
+          continue;
+        }
+
+        // Out of the recovery sweep, or the settler would pick it straight back up.
+        cache.resolveOpenTrade(id);
+        for (const t2 of cache.trades.values()) {
+          if (String(t2.id) === id) cache.trades.delete(t2.id);
+        }
+        io.to(addr).emit('trade_resolved', {
+          betId: id,
+          status: 'CANCELLED',
+          refunded: refund ? amount : 0,
+          message: refund
+            ? `Trade #${id} was voided by support and your ${amount.toFixed(2)} USDC stake was returned.`
+            : `Trade #${id} was voided by support.`
+        });
+        io.to(addr).emit('balance_update', { balance: String(cache.sessions.get(addr)?.balance || 0), reason: 'TRADE_VOIDED' });
+
+        summary.resolved++;
+        summary.resolvedIds.push(id);
+      } catch (e) {
+        summary.failures.push({ id, stage: 'exception', error: e?.message || String(e) });
+      }
+    }
+
+    console.log(
+      `[ResolveStuck] apply=${apply} refund=${refund} -> resolved ${summary.resolved}/${summary.eligible}, ` +
+      `refunded ${summary.refundedTotal} USDC, ${summary.failures.length} failure(s)`
+    );
+    return res.json(summary);
+  } catch (err) {
+    console.error('[ResolveStuck] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/admin/trades', (req, res) => {

@@ -13,7 +13,7 @@ import {
   Layers, Sun, Moon, AlertTriangle
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
-import { isTradeInFlight, isTradeSettled } from "./utils/tradeStatus";
+import { isTradeInFlight, isTradeSettled, isTradeOverdue } from "./utils/tradeStatus";
 import { parseEther, parseUnits } from "viem";
 // Solana imports removed
 
@@ -400,9 +400,19 @@ export default function UserApp() {
   // PAYOUT_FAILED card at index 0 can never hide the next trade's countdown.
   // Fall back to the newest trade so a just-settled outcome flash still renders
   // during its ~1s cleanup window.
+  //
+  // An OVERDUE unsettled trade is deliberately not latched. The trading widget
+  // replaces its controls with the active-trade animation for as long as
+  // `activeTrade` exists, so a trade the backend failed to settle left the user
+  // unable to place any trade at all. The trade itself is untouched and still
+  // renders as PENDING in the history - overdue only decides whether it keeps
+  // holding the controls, never what verdict it gets.
   const activeTrade =
-    activeTrades.find(t => ['PENDING', 'RESOLVING'].includes(t.status)) ||
-    activeTrades[0] ||
+    activeTrades.find(t => ['PENDING', 'RESOLVING'].includes(t.status) && !isTradeOverdue(t)) ||
+    // The fallback must skip overdue trades too, or a single unsettled trade
+    // would be excluded above and then immediately re-selected here, leaving the
+    // widget blocked exactly as before.
+    activeTrades.find(t => !isTradeOverdue(t)) ||
     null;
 
   // Backend Health Gate: Poll /health until backend responds, progress drives the three dots
@@ -961,26 +971,16 @@ const performStealthChecks = useCallback(async (addr) => {
 
   // Keep sessionBalanceRef in sync with sessionBalance state so async
   // callbacks always read the live value without stale closures.
+  //
+  // NOTE: the balance is deliberately NOT cached in localStorage. It was, and
+  // that was wrong: localStorage is per-device, so a phone and a desktop each
+  // kept their own number and disagreed with each other until the next server
+  // response - the same cross-device divergence that made the mobile balance
+  // look stuck. The server writes one shared snapshot to Redis and answers
+  // /session/balance from it, so there is a single value every device agrees on.
   useEffect(() => {
     sessionBalanceRef.current = sessionBalance;
-    // Mirror the balance into localStorage so the next cold start paints a real
-    // number immediately instead of $0.00. The session ADDRESS already has this
-    // fast path (15market_session_addr_*) but the balance did not, so a phone -
-    // which has the least time budget to survive a slow first request - was the
-    // worst place to land on a blank balance.
-    //
-    // Never cache 0: a 0 is only ever true before the first successful read, so
-    // writing it would overwrite a good cached value with a placeholder.
-    if (address && sessionBalance > 0) {
-      try {
-        localStorage.setItem(`15market_session_balance_${address.toLowerCase()}`, String(sessionBalance));
-      } catch (e) {
-        // Private mode / quota exceeded. The cache is an optimisation, so the
-        // network read still populates the balance normally.
-        console.warn('[Balance] could not cache balance locally:', e?.message || e);
-      }
-    }
-  }, [sessionBalance, address]);
+  }, [sessionBalance]);
 
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
@@ -1035,7 +1035,7 @@ const performStealthChecks = useCallback(async (addr) => {
       const id = backendTradeKey(t);
       if (!id) return;
       const existing = uniqueBackendById.get(id);
-      const statusOrder = { "PAID": 4, "WON": 4, "LOST": 4, "PAYOUT_FAILED": 4, "CANCELLED": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+      const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCELLED": 4, "DISPUTE": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
       const newStatus = t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING");
 
       if (!existing || statusOrder[newStatus] > statusOrder[existing.status]) {
@@ -1076,7 +1076,7 @@ const performStealthChecks = useCallback(async (addr) => {
         const bt = mergedMap.get(key);
         if (bt) {
           // If in both, merge them with a status hierarchy
-          const statusOrder = { "PAID": 4, "WON": 4, "LOST": 4, "PAYOUT_FAILED": 4, "CANCELLED": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCELLED": 4, "DISPUTE": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
           const finalStatus = (statusOrder[local.status] || 0) > (statusOrder[bt.status] || 0) ? local.status : bt.status;
 
           mergedMap.set(key, {
@@ -1162,59 +1162,76 @@ const performStealthChecks = useCallback(async (addr) => {
 
   /**
    * Initialize Server-Side Session Wallet (Stateless & Secure)
+   *
+   * Owns its own retry, with backoff and a cap. Retry used to be driven by
+   * re-rendering: the failure path cleared the per-address "already attempted"
+   * guard, and flipping isSignerInitializing re-ran the effect that reads that
+   * guard, so a slow or failing /session/init restarted itself every timeout
+   * period, forever. The UI never left "Syncing...", and the wallet was never
+   * handed back as ready. Nothing about a retry should depend on when React
+   * happens to render, so it lives here.
    */
   const initializeSessionWallet = useCallback(async () => {
     if (!address) return;
 
     // Every other balance fetch in this file aborts at 8s (see updateEvmSessionBal
-    // and refetchEvmBalance). This one had no AbortController at all, so a hung
-    // request left isSignerInitializing stuck true - and that flag is literally
-    // what renders "Syncing..." in place of the wallet address. One slow request
-    // pinned the UI in that state for its entire duration, and hasInitAttempted
-    // below blocks any retry while it is in flight. Bound it like its siblings.
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    // and refetchEvmBalance). This one had no AbortController, so a hung request
+    // left isSignerInitializing stuck true - and that flag is what renders
+    // "Syncing..." in place of the wallet address.
+    setIsSignerInitializing(true);
 
-    try {
-      setIsSignerInitializing(true);
+    const MAX_ATTEMPTS = 3;
+    let lastError = null;
 
-      const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: address.toLowerCase() }),
-        signal: controller.signal
-      }).catch(err => {
-        throw new Error(`Connection to Backend Failed`);
-      });
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      if (attempt > 0) {
+        // 1s then 2s. Short enough to feel instant on a flaky phone network,
+        // bounded so a genuinely down backend fails fast instead of hanging.
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
 
-      if (!res.ok) throw new Error(`Backend init failed (${res.status})`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: address.toLowerCase() }),
+          signal: controller.signal
+        });
 
-      const data = await res.json();
-      if (!data.sessionAddress) throw new Error("No session address returned");
+        if (!res.ok) throw new Error(`Backend init failed (${res.status})`);
 
-      const sessionObj = { address: data.sessionAddress, isRemote: true };
+        const data = await res.json();
+        if (!data.sessionAddress) throw new Error("No session address returned");
 
-      setEvmSessionWallet(sessionObj);
-      setSessionBalance(parseFloat(data.balance) || 0);
-      setIsSessionSynced(true);
-      setSessionMode(true);
-      localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+        setEvmSessionWallet({ address: data.sessionAddress, isRemote: true });
+        setSessionBalance(parseFloat(data.balance) || 0);
+        setIsSessionSynced(true);
+        setSessionMode(true);
+        localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
 
-      setIsSignerInitializing(false);
-
-    } catch (err) {
-      setIsSignerInitializing(false);
-      hasInitAttempted.current = false; // Allow automatic retries if it failed
-      console.warn("Session init fallback:", err.message);
-      // The balance does not depend on this call succeeding: /session/balance
-      // answers from the reconciled ledger, and the cached value is already on
-      // screen. Pull it now instead of waiting for the next 5s tick, so a timed
-      // out init degrades to "correct a moment later" rather than "blank".
-      updateEvmSessionBal(true);
-      // Cached address (if any) is already shown via the fast-path in the useEffect below
-    } finally {
-      clearTimeout(timeoutId);
+        setIsSignerInitializing(false);
+        return;
+      } catch (err) {
+        lastError = err;
+        console.warn(`[SessionInit] attempt ${attempt + 1}/${MAX_ATTEMPTS} failed:`, err.message);
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
+
+    // Out of attempts. Deliberately NOT clearing hasInitAttempted here: that
+    // guard is per-address and is what stops this function from re-entering
+    // itself via the effect. It is reset on an address change, and by the
+    // explicit "Not Ready (Retry)" affordance in the dashboard.
+    setIsSignerInitializing(false);
+    console.warn('[SessionInit] giving up for this address:', lastError?.message);
+
+    // The balance never depended on this call. /session/balance answers from the
+    // reconciled ledger, and its own 5s poller keeps converging - so a failed
+    // init costs an address confirmation, not the user's balance.
+    updateEvmSessionBal(true);
   }, [address, updateEvmSessionBal]);
 
   const fetchMyProfile = useCallback(async () => {
@@ -1235,7 +1252,14 @@ const performStealthChecks = useCallback(async (addr) => {
           if (Array.isArray(data.trades)) {
             reconcileTrades(data.trades);
           }
-          if (!evmSessionWallet && !isSignerInitializing) {
+          // Safety net for the session wallet, routed through the same
+          // per-address guard as the auto-init effect. This used to call
+          // initializeSessionWallet() directly whenever no wallet was present,
+          // so a backend that kept failing to return one had this re-arming the
+          // whole init sequence on every profile poll - a second, slower version
+          // of the "Syncing..." loop.
+          if (!evmSessionWallet && !hasInitAttempted.current) {
+            hasInitAttempted.current = true;
             initializeSessionWallet();
           }
         }
@@ -1260,11 +1284,30 @@ const performStealthChecks = useCallback(async (addr) => {
   const hasInitAttempted = useRef(false);
   useEffect(() => { hasInitAttempted.current = false; }, [address]);
 
-  // Which address has already had its cached balance painted. The effect below
-  // re-runs whenever evmSessionWallet or isSignerInitializing changes, so
-  // without this guard a stale cached value would be re-applied on top of the
-  // live balance the moment it arrived.
-  const cachedBalancePaintedFor = useRef(null);
+  // The session wallet is derived deterministically from the user's address, and
+  // the backend derives the same value on every call - so for a returning user
+  // the cached address IS the live address, and the wallet is tradeable the
+  // instant it is restored. Nothing about being ready to trade should wait on a
+  // network round trip.
+  //
+  // Read during render, not in an effect. Restoring it in an effect meant the
+  // first frame after the address landed had no wallet at all, so the UI flashed
+  // "Not Ready" for a frame (longer on a phone, whose main thread is busy with
+  // the chart loop) before the effect caught up. localStorage is synchronous, so
+  // the very first paint already has it.
+  const cachedSessionAddr = address
+    ? localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`)
+    : null;
+  const resolvedSessionWallet = evmSessionWallet
+    || (cachedSessionAddr ? { address: cachedSessionAddr, isRemote: true, cached: true } : null);
+
+  // This is what the "Syncing..." placeholder is allowed to mean. It used to be
+  // driven by isSignerInitializing - "is a request in flight" - which is a
+  // different question, and on a phone that request was the first thing to
+  // arrive. A user who already had a wallet sat behind a syncing label for a
+  // wallet that was ready the whole time.
+  const isSessionWalletReady = !!resolvedSessionWallet?.address;
+  const isSessionWalletPending = !isSessionWalletReady && isSignerInitializing;
 
   // AUTO-INITIALIZE Session Wallet as soon as any address is available.
   // FAST PATH: Restore cached session address AND balance immediately so the UI
@@ -1279,23 +1322,15 @@ const performStealthChecks = useCallback(async (addr) => {
       setEvmSessionWallet({ address: cachedAddr, isRemote: true, cached: true });
     }
 
-    // ...and the last known balance, so the figure is a real number on the very
-    // first paint instead of $0.00. Once per address, never over a live value.
-    if (cachedBalancePaintedFor.current !== key) {
-      cachedBalancePaintedFor.current = key;
-      const cachedBal = parseFloat(localStorage.getItem(`15market_session_balance_${key}`));
-      if (!isNaN(cachedBal) && cachedBal > 0) {
-        setSessionBalance(cachedBal);
-        sessionBalanceRef.current = cachedBal;
-      }
-    }
-
-    // Always fire a background network sync (for fresh balance + confirming address)
-    if (!isSignerInitializing && !hasInitAttempted.current) {
+    // One init attempt per address. hasInitAttempted is NOT cleared on failure -
+    // clearing it here used to re-arm the call from inside its own failure path,
+    // which is what turned one slow request into an endless "Syncing..." loop.
+    // An address change resets it; so does the dashboard's explicit Retry.
+    if (!hasInitAttempted.current) {
       hasInitAttempted.current = true;
       initializeSessionWallet();
     }
-  }, [address, evmSessionWallet, isSignerInitializing, initializeSessionWallet]);
+  }, [address, evmSessionWallet, initializeSessionWallet]);
 
   // 3. Aggressive Logic (Optimized: fewer redundant refreshes)
   const aggressiveRefresh = useCallback((force = false) => {
@@ -3347,8 +3382,8 @@ const performStealthChecks = useCallback(async (addr) => {
               userProfile={userProfile}
               theme={theme}
               isSmallScreen={isSmallScreen}
-              evmSessionWallet={evmSessionWallet}
-              isSignerInitializing={isSignerInitializing}
+              evmSessionWallet={resolvedSessionWallet}
+              isSignerInitializing={isSessionWalletPending}
               onRetryInit={initializeSessionWallet}
               transactionHistory={transactionHistory}
               onViewReceipt={handleViewReceipt}
@@ -3713,9 +3748,9 @@ const performStealthChecks = useCallback(async (addr) => {
                isOpen={isProfileOpen}
                onClose={() => setIsProfileOpen(false)}
                wallet={wallet}
-               evmSessionWallet={evmSessionWallet}
+               evmSessionWallet={resolvedSessionWallet}
                userProfile={userProfile}
-               isSignerInitializing={isSignerInitializing}
+               isSignerInitializing={isSessionWalletPending}
                onRetryInit={initializeSessionWallet}
                sessionBalance={sessionBalance}
                evmBalance={evmBalance}
