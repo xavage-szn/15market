@@ -108,6 +108,41 @@ function recordGasFunding(userAddr, amountWei) {
 }
 
 /**
+ * How much of the session wallet's on-chain balance belongs to the PLATFORM.
+ *
+ * This is the ceiling for any sweep of idle funds. Everything above it is the
+ * user's trading balance and must never be taken.
+ */
+function getGasFloatOwed(userAddr) {
+    const addr = String(userAddr || '').toLowerCase();
+    if (!addr) return 0;
+    const { gasOwed } = readState(addr);
+    return isFinite(gasOwed) && gasOwed > 0 ? gasOwed : 0;
+}
+
+/**
+ * Called after the platform has swept `amount` of its own gas float back out of
+ * a session wallet. Without this the float is a pure ratchet: it is only ever
+ * increased by recordGasFunding, so a sweep capped at the float would take the
+ * same money again on the next pass, every 5 minutes, until the user's balance
+ * was gone. Recording the reclaim is what makes repeated sweeps terminate.
+ *
+ * Floors at zero so an over-reported reclaim can never make the platform believe
+ * it is owed gas it already took back, which would authorise a later sweep of
+ * user funds.
+ */
+function recordGasReclaim(userAddr, amount) {
+    const addr = String(userAddr || '').toLowerCase();
+    const amt = Number(amount);
+    if (!addr || !isFinite(amt) || amt <= 0) return 0;
+    const { gasOwed } = readState(addr);
+    const next = Math.max(0, Number((gasOwed - amt).toFixed(12)));
+    writeState(addr, { gasOwed: next });
+    console.log(`[ChainReconciler] Gas float reclaimed for ${addr}: -${amt} (owed ${next})`);
+    return amt;
+}
+
+/**
  * Called after a deposit has ALREADY been credited through a verified,
  * explicit path (POST /session/deposit). Advance the baseline by that amount
  * so the reconciler does not see the same inflow a second time and
@@ -337,6 +372,8 @@ async function reconcileSessionBalance(userAddr, sessionAddress, opts = {}) {
 module.exports = {
     reconcileSessionBalance,
     recordGasFunding,
+    recordGasReclaim,
+    getGasFloatOwed,
     advanceBaselineForCreditedDeposit,
     seedBaseline,
     getOnChainSpendable,
