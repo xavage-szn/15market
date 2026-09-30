@@ -64,22 +64,35 @@ ALTER TABLE placed_bets
 -- Only real user trades qualify: the trades table also holds funding rows
 -- (status CONFIRMED, amount credited) and copy-trade bookkeeping, neither of
 -- which is a bet id and neither of which should block a future bet.
+--
+-- Every source value is cast explicitly. The declared schema in 001/002 says
+-- `duration integer`, but the live table turned out to hold it as TEXT, and a
+-- plain `t.duration` aborted the whole insert with:
+--
+--   ERROR: 42804: column "duration" is of type integer but expression is of
+--   type text
+--
+-- A single uncast column failed the entire migration, so nothing was applied and
+-- trades stayed refused. Casting through text and only converting to int when
+-- the value is genuinely numeric makes this work against either real schema, and
+-- degrades a blank or malformed value to NULL rather than aborting the insert.
 INSERT INTO placed_bets (bet_id, user_address, amount, symbol, duration, status, stake_tx_hash, created_at, settled_at)
-SELECT DISTINCT ON (t.id)
+SELECT DISTINCT ON (t.id::text)
        t.id::text,
-       lower(t.user_address),
-       GREATEST(COALESCE(t.amount, 0), 0),
-       t.symbol,
-       t.duration,
-       t.status,
-       t.tx_hash,
-       to_timestamp(COALESCE(t.timestamp, 0) / 1000.0),
-       CASE WHEN upper(t.status) IN ('WON','PAID','LOST','SETTLED') THEN to_timestamp(COALESCE(t.timestamp, 0) / 1000.0) END
+       lower(t.user_address::text),
+       COALESCE(t.amount::numeric, 0),
+       t.symbol::text,
+       CASE WHEN t.duration::text ~ '^[0-9]+$' THEN t.duration::text::int ELSE NULL END,
+       t.status::text,
+       t.tx_hash::text,
+       to_timestamp(COALESCE(t.timestamp::text, '0')::double precision / 1000.0),
+       CASE WHEN upper(t.status::text) IN ('WON','PAID','LOST','SETTLED')
+            THEN to_timestamp(COALESCE(t.timestamp::text, '0')::double precision / 1000.0) END
 FROM trades t
 WHERE t.id IS NOT NULL
-  AND t.id <> ''
-  AND lower(t.user_address) IS NOT NULL
-  AND upper(t.status) IN ('PENDING', 'RESOLVING', 'WON', 'PAID', 'LOST', 'SETTLED')
+  AND t.id::text <> ''
+  AND lower(t.user_address::text) IS NOT NULL
+  AND upper(t.status::text) IN ('PENDING', 'RESOLVING', 'WON', 'PAID', 'LOST', 'SETTLED')
   AND t.symbol IS NOT NULL          -- funding rows have no symbol; they are not bets
-ORDER BY t.id::text, COALESCE(t.timestamp, 0) DESC
+ORDER BY t.id::text, COALESCE(t.timestamp::text, '0')::double precision DESC
 ON CONFLICT (bet_id) DO NOTHING;
