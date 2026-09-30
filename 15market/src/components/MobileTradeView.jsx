@@ -5,6 +5,7 @@ import { priceSocketService } from '../utils/priceSocket';
 import { KEEPER_URL_ARC } from '../constants';
 import { GlobalTradeScroller } from './GlobalTradeScroller';
 import { FlipClock, ProgressBeam, ResolvingOutcome, TradeOutcome } from './TradingWidget';
+import { isTradeSettled, isTradeInFlight, isWinningTrade } from '../utils/tradeStatus';
 
 const LOGO_MAP = {
   eth: '/ethusdc.png',
@@ -1352,7 +1353,11 @@ useEffect(() => {
               <TradeOutcome
                 won={settledTrade.status === 'WON' || settledTrade.status === 'PAID'}
                 isLight={isLight}
-                isPending={currentActiveTrade && currentActiveTrade.status === 'PENDING'}
+                // Must describe the trade being revealed, not some other row. The
+                // disclaimer is for a trade that has no verdict yet; asking about
+                // `currentActiveTrade` here meant the card for a settled result
+                // could be overridden by the state of an unrelated live one.
+                isPending={isTradeInFlight(settledTrade)}
               />
             ) : null}
           </motion.div>
@@ -1545,8 +1550,17 @@ useEffect(() => {
                 </div>
               ) : (
                 tradeHistory.map((trade, idx) => {
-                  const isWin = trade.status === 'WON' || trade.status === 'PAID' || trade.result === 'WIN';
+                  // The verdict has to come from the trade's real state, not from
+                  // "is it a win?". Treating anything that is not a win as a loss
+                  // printed LOST over every still-running trade, so a PENDING bet
+                  // looked settled in this list and then opened the "still
+                  // processing" disclaimer when tapped - the row and the tap gate
+                  // disagreed about the same trade. Settled means settled: win,
+                  // loss, or an explicit in-flight status, never a fabricated one.
+                  const settled = isTradeSettled(trade);
+                  const isWin = settled && isWinningTrade(trade);
                   const isUp = trade.direction === 'UP' || trade.direction === 'YES' || trade.direction === 1;
+                  const statusLabel = String(trade.status || '').toUpperCase() || (settled ? 'SETTLED' : 'PENDING');
                   return (
                     <div
                       key={trade.id || idx}
@@ -1576,13 +1590,17 @@ useEffect(() => {
                       <div className="text-right">
                         <div
                           className={`text-[12px] font-black ${
-                            isWin ? 'text-[#17A364]' : 'text-[#EE4B4B]'
+                            !settled ? 'text-[#FFB020]' : isWin ? 'text-[#17A364]' : 'text-[#EE4B4B]'
                           }`}
                         >
-                          {isWin ? `+$${parseFloat(trade.payout || 0).toFixed(2)}` : 'LOST'}
+                          {!settled
+                            ? statusLabel
+                            : isWin
+                              ? `+$${parseFloat(trade.payout || 0).toFixed(2)}`
+                              : 'LOST'}
                         </div>
                         <div className={`text-[9px] font-bold ${isLight ? 'text-gray-400' : 'text-white/40'}`}>
-                          {trade.status || 'SETTLED'}
+                          {statusLabel}
                         </div>
                       </div>
                     </div>
