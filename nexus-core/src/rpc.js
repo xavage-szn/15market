@@ -132,17 +132,27 @@ class RPCManager {
    * a deposit. Callers doing reconciliation must use this and skip the cycle
    * on null.
    *
+   * Providers are RACED, not walked in order. Walking them meant the worst case
+   * was the per-provider budget multiplied by the provider count, so one slow
+   * RPC cost 5s and two cost 10s. Every balance read is on a user-visible
+   * request with a client-side abort, so a read that can outlast that budget
+   * makes the balance simply never load. Racing keeps the worst case at a
+   * single provider's budget regardless of how many are configured.
+   *
    * @returns {Promise<string|null>} formatted balance, or null if no provider answered
    */
   async tryGetBalance(address) {
     if (this.providers.length === 0) return null;
-    for (let i = 0; i < this.providers.length; i++) {
-      try {
-        const bal = await this.callWithTimeout(this.providers[i].getBalance(address, 'pending'), 5000);
-        return ethers.formatEther(bal);
-      } catch {}
-    }
-    return null;
+    const attempts = this.providers.map((provider, i) =>
+      this.callWithTimeout(provider.getBalance(address, 'pending'), 5000)
+        .then((bal) => ({ i, bal }))
+        .catch(() => null)
+    );
+    // Every attempt settles, so this never leaks an unhandled rejection, and a
+    // losing provider that resolves later cannot overwrite the winner.
+    const results = await Promise.all(attempts);
+    const winner = results.find((r) => r && r.bal !== undefined && r.bal !== null);
+    return winner ? ethers.formatEther(winner.bal) : null;
   }
 
   deriveSessionWallet(userAddr) {

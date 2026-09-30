@@ -960,10 +960,28 @@ const performStealthChecks = useCallback(async (addr) => {
   }, [address]);
 
   // Keep sessionBalanceRef in sync with sessionBalance state so async
-  // callbacks always read the live value without stale-closure issues.
+  // callbacks always read the live value without stale closures.
   useEffect(() => {
     sessionBalanceRef.current = sessionBalance;
-  }, [sessionBalance]);
+    // Mirror the balance into localStorage so the next cold start paints a real
+    // number immediately instead of $0.00. The session ADDRESS already has this
+    // fast path (15market_session_addr_*) but the balance did not, so a phone -
+    // which has the least time budget to survive a slow first request - was the
+    // worst place to land on a blank balance.
+    //
+    // Never cache 0: a 0 is only ever true before the first successful read, so
+    // writing it would overwrite a good cached value with a placeholder.
+    if (address && sessionBalance > 0) {
+      try {
+        localStorage.setItem(`15market_session_balance_${address.toLowerCase()}`, String(sessionBalance));
+      } catch (e) {
+        // Private mode / quota exceeded. The cache is an optimisation, so the
+        // network read still populates the balance normally.
+        console.warn('[Balance] could not cache balance locally:', e?.message || e);
+      }
+    }
+  }, [sessionBalance, address]);
+
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
@@ -1148,13 +1166,23 @@ const performStealthChecks = useCallback(async (addr) => {
   const initializeSessionWallet = useCallback(async () => {
     if (!address) return;
 
+    // Every other balance fetch in this file aborts at 8s (see updateEvmSessionBal
+    // and refetchEvmBalance). This one had no AbortController at all, so a hung
+    // request left isSignerInitializing stuck true - and that flag is literally
+    // what renders "Syncing..." in place of the wallet address. One slow request
+    // pinned the UI in that state for its entire duration, and hasInitAttempted
+    // below blocks any retry while it is in flight. Bound it like its siblings.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
       setIsSignerInitializing(true);
 
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: address.toLowerCase() })
+        body: JSON.stringify({ address: address.toLowerCase() }),
+        signal: controller.signal
       }).catch(err => {
         throw new Error(`Connection to Backend Failed`);
       });
@@ -1178,9 +1206,16 @@ const performStealthChecks = useCallback(async (addr) => {
       setIsSignerInitializing(false);
       hasInitAttempted.current = false; // Allow automatic retries if it failed
       console.warn("Session init fallback:", err.message);
+      // The balance does not depend on this call succeeding: /session/balance
+      // answers from the reconciled ledger, and the cached value is already on
+      // screen. Pull it now instead of waiting for the next 5s tick, so a timed
+      // out init degrades to "correct a moment later" rather than "blank".
+      updateEvmSessionBal(true);
       // Cached address (if any) is already shown via the fast-path in the useEffect below
+    } finally {
+      clearTimeout(timeoutId);
     }
-  }, [address]);
+  }, [address, updateEvmSessionBal]);
 
   const fetchMyProfile = useCallback(async () => {
     if (!address) return;
@@ -1225,16 +1260,34 @@ const performStealthChecks = useCallback(async (addr) => {
   const hasInitAttempted = useRef(false);
   useEffect(() => { hasInitAttempted.current = false; }, [address]);
 
+  // Which address has already had its cached balance painted. The effect below
+  // re-runs whenever evmSessionWallet or isSignerInitializing changes, so
+  // without this guard a stale cached value would be re-applied on top of the
+  // live balance the moment it arrived.
+  const cachedBalancePaintedFor = useRef(null);
+
   // AUTO-INITIALIZE Session Wallet as soon as any address is available.
-  // FAST PATH: Restore cached session address immediately so the UI shows the
-  // wallet address right away before the network call completes.
+  // FAST PATH: Restore cached session address AND balance immediately so the UI
+  // shows real values right away, before any network call completes.
   useEffect(() => {
     if (!address) return;
+    const key = address.toLowerCase();
 
     // Instantly restore cached address for returning users
-    const cachedAddr = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
+    const cachedAddr = localStorage.getItem(`15market_session_addr_${key}`);
     if (cachedAddr && !evmSessionWallet) {
       setEvmSessionWallet({ address: cachedAddr, isRemote: true, cached: true });
+    }
+
+    // ...and the last known balance, so the figure is a real number on the very
+    // first paint instead of $0.00. Once per address, never over a live value.
+    if (cachedBalancePaintedFor.current !== key) {
+      cachedBalancePaintedFor.current = key;
+      const cachedBal = parseFloat(localStorage.getItem(`15market_session_balance_${key}`));
+      if (!isNaN(cachedBal) && cachedBal > 0) {
+        setSessionBalance(cachedBal);
+        sessionBalanceRef.current = cachedBal;
+      }
     }
 
     // Always fire a background network sync (for fresh balance + confirming address)

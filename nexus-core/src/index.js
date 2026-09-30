@@ -731,34 +731,50 @@ app.get('/session/balance/:address', async (req, res) => {
     // ── On-chain is the source of truth ───────────────────────────────────
     // The chain holds the money that can actually be staked, and it moves on
     // its own when a stake is sent to the treasury or a win settles back in.
-    // Read it here so the number the user sees is the real one after every
+    // We read it so the number the user sees is the real one after every
     // transaction, with the platform's gas float subtracted by the reconciler.
-    // Falls back to the last known good ledger value if the RPC is down, so a
-    // provider outage can never show a false 0.
-    const onChain = await chainReconciler.getOnChainSpendable(userAddr, sessionWallet.address);
-    if (onChain) {
-      const session = cache.sessions.get(userAddr);
-      if (session) {
-        session.balance = onChain.spendable;
-        if (profiles.get(userAddr)?.balance !== onChain.spendable) {
-          profiles.upsert(userAddr, { balance: onChain.spendable });
-        }
-      }
-      res.json({
-        success: true,
-        balance: String(onChain.spendable),
-        onChainBalance: String(onChain.onChain),
-        gasFloat: String(onChain.gasOwed),
-        sessionAddress: sessionWallet.address,
-        source: 'on-chain'
-      });
-      return;
-    }
+    //
+    // Detached, for the same reason the reconcile above is. This read fans out
+    // across up to four RPC providers, and tryGetBalance tries them SEQUENTIALLY
+    // with a 5s budget each - so a single slow provider costs 5s and two cost
+    // 10s. Awaiting it inline made the whole response outlast the client's 8s
+    // abort, so the response was discarded and the balance never updated. That
+    // is the "balance sits at 0 / says syncing forever" symptom, and it hit
+    // phones hardest because they have the least time budget to spare.
+    //
+    // The ledger is already reconciled by the call above, so answering from it
+    // immediately is correct. When the chain disagrees, the corrected number is
+    // pushed over the socket and picked up by the next poll anyway.
+    const answeredSession = cache.sessions.get(userAddr);
+    const ledgerBalance = answeredSession ? answeredSession.balance : profileBal;
 
-    const finalSession = cache.sessions.get(userAddr);
+    chainReconciler.getOnChainSpendable(userAddr, sessionWallet.address)
+        .then((onChain) => {
+            if (!onChain) return; // RPC down: keep the last known good value
+            const session = cache.sessions.get(userAddr);
+            if (!session) return;
+            // Now that the read is off the response path it can land long after
+            // the number it raced with. A trade, a win credit or the reconcile
+            // above may have moved the ledger in the meantime, and overwriting
+            // that with a value read before it would silently undo real money.
+            // Only apply the correction if the ledger is still exactly what we
+            // answered with, i.e. nothing else touched it while we were reading.
+            if (session.balance !== ledgerBalance) return;
+            if (session.balance === onChain.spendable) return;
+            session.balance = onChain.spendable;
+            if (profiles.get(userAddr)?.balance !== onChain.spendable) {
+                profiles.upsert(userAddr, { balance: onChain.spendable });
+            }
+            io.to(userAddr).emit('balance_update', {
+                balance: String(onChain.spendable),
+                reason: 'CHAIN_SYNC'
+            });
+        })
+        .catch((chainErr) => console.warn('[session/balance] on-chain read skipped:', chainErr.message));
+
     res.json({ 
       success: true, 
-      balance: String(finalSession ? finalSession.balance : profileBal), 
+      balance: String(ledgerBalance), 
       sessionAddress: sessionWallet.address, 
       source: 'session-cache'
     });
