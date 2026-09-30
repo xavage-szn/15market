@@ -41,57 +41,6 @@ const settlementPriceService = require('./services/settlementPriceService');
 const chainReconciler = require('./services/chainReconciler');
 const { requireAdminAuth, handleAdminLogin } = require('./security');
 
-/**
- * GET /health/settlement
- *
- * "Are most trades settling?" needs an answer you can read, not an impression.
- * The failure this exists to catch was silent: an unusable exit price used to be
- * turned into a LOST verdict, so a price-feed gap quietly cost users their stake
- * with nothing counting it.
- *
- * No auth and no PII — just aggregate counters, safe to poll. Counters are
- * in-process and reset on deploy, which is exactly the window you care about
- * when a change is live.
- */
-app.get('/health/settlement', (req, res) => {
-  const s = classicEngine._settlementStats();
-  const decided = s.settledWins + s.settledLosses;
-  res.json({
-    ok: true,
-    settled: {
-      wins: s.settledWins,
-      losses: s.settledLosses,
-      total: decided,
-      // Share of decided trades that produced a real verdict. Disputes are
-      // excluded on purpose: they are the platform failing, not the market.
-      autoSettledRate: decided > 0 ? Number(((decided / (decided + s.disputes)) * 100).toFixed(2)) : null
-    },
-    disputes: {
-      total: s.disputes,
-      byReason: s.byReason,
-      // Anything above zero means users are waiting on a human.
-      note: s.disputes > 0
-        ? 'Users are blocked on these until an admin resolves them.'
-        : 'none open'
-    },
-    liveTradesInMemory: cache.trades.size,
-    openTradeRegistry: 'see logs for recovered counts',
-    sinceProcessStart: true
-  });
-});
-
-/**
- * POST /admin/login
- *
- * Exchanges the operator credentials for a short-lived bearer token. This is the
- * missing link: generateAdminToken and requireAdminAuth both existed, but nothing
- * ever issued a token, so every admin endpoint was unreachable in practice.
- *
- * The secret stays server-side. A shared secret in the admin frontend would be
- * inlined into the public JS bundle and readable by anyone who opens the site.
- */
-app.post('/admin/login', handleAdminLogin);
-
 // --- DYNAMICALLY DERIVED SOLANA RELAYER ADDRESS ---
 let derivedSolanaRelayerAddress = '11111111111111111111111111111111'; // default fallback
 if (config.SOL_GAS_TANK_KEY) {
@@ -173,6 +122,64 @@ function deriveSessionWallet(userAddr) {
 
 // --- Initialize Engines ---
 const classicEngine = new ClassicEngine(io);
+
+// --- HEALTH & ADMIN AUTH ROUTES ---
+//
+// Declared here, not at the top of the file: `app` is created further down and
+// classicEngine is constructed just above, so registering these earlier threw
+// "Cannot access 'app' before initialization" and the process would not boot at
+// all. Route order in this file is not free — it has to follow the objects the
+// handlers close over.
+
+/**
+ * GET /health/settlement
+ *
+ * "Are most trades settling?" needs an answer you can read, not an impression.
+ * The failure this exists to catch was silent: an unusable exit price used to be
+ * turned into a LOST verdict, so a price-feed gap quietly cost users their stake
+ * with nothing counting it.
+ *
+ * No auth and no PII — just aggregate counters, safe to poll. Counters are
+ * in-process and reset on deploy, which is exactly the window you care about
+ * when a change is live.
+ */
+app.get('/health/settlement', (req, res) => {
+  const s = classicEngine._settlementStats();
+  const decided = s.settledWins + s.settledLosses;
+  res.json({
+    ok: true,
+    settled: {
+      wins: s.settledWins,
+      losses: s.settledLosses,
+      total: decided,
+      // Share of decided trades that produced a real verdict. Disputes are
+      // excluded on purpose: they are the platform failing, not the market.
+      autoSettledRate: decided > 0 ? Number(((decided / (decided + s.disputes)) * 100).toFixed(2)) : null
+    },
+    disputes: {
+      total: s.disputes,
+      byReason: s.byReason,
+      // Anything above zero means users are waiting on a human.
+      note: s.disputes > 0
+        ? 'Users are blocked on these until an admin resolves them.'
+        : 'none open'
+    },
+    liveTradesInMemory: cache.trades.size,
+    sinceProcessStart: true
+  });
+});
+
+/**
+ * POST /admin/login
+ *
+ * Exchanges the operator credentials for a short-lived bearer token. This is the
+ * missing link: generateAdminToken and requireAdminAuth both existed, but nothing
+ * ever issued a token, so every admin endpoint was unreachable in practice.
+ *
+ * The secret stays server-side. A shared secret in the admin frontend would be
+ * inlined into the public JS bundle and readable by anyone who opens the site.
+ */
+app.post('/admin/login', handleAdminLogin);
 
 /**
  * AGGREGATED ADMIN METRICS BROADCAST
