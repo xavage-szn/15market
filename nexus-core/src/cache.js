@@ -8,10 +8,36 @@ let redis = null;
 function getRedis() {
   if (!redis) {
     redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: null,
+      // These MUST stay bounded. With `maxRetriesPerRequest: null` a command
+      // issued while the connection is down sits in the offline queue forever
+      // and never settles — so the `try/catch` around every `await r.get(...)`
+      // never runs and the HTTP response is never sent. A dead Redis endpoint
+      // then shows up in the browser as a request that hangs and is finally
+      // reported as a CORS / ERR_FAILED failure, with nothing in the server
+      // logs. A finite retry count turns that hang into an ordinary thrown
+      // error, which every caller already handles by degrading.
+      maxRetriesPerRequest: 3,
+      connectTimeout: 5000,
+      // Keep backing off and reconnecting; just never let a single command
+      // wait on it indefinitely.
       retryStrategy: (times) => Math.min(times * 1000, 30000)
     });
-    redis.on('error', (err) => {});
+
+    // Rate-limit the noise: ioredis retries forever, and an unreachable
+    // endpoint would otherwise print one line per retry, per process, forever.
+    let lastLogged = 0;
+    let loggedAny = false;
+    redis.on('error', (err) => {
+      const now = Date.now();
+      if (!loggedAny || now - lastLogged > 30000) {
+        loggedAny = true;
+        lastLogged = now;
+        console.error('[Redis] connection error (Redis-backed features are degraded):', err?.message);
+      }
+    });
+    redis.on('ready', () => {
+      console.log('[Redis] connected.');
+    });
   }
   return redis;
 }
@@ -278,6 +304,17 @@ class Cache {
       console.warn('[Redis] registerOpenTrade failed:', e.message);
       return false;
     }
+  }
+
+  // Awaited registration with bounded retries for the placement path. A trade
+  // that never reaches this set is invisible to every recovery mechanism, so
+  // placement must know whether it landed — never fire-and-forget.
+  async registerOpenTradeWithRetry(trade, retries = 2) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 300 * attempt));
+      if (await this.registerOpenTrade(trade)) return true;
+    }
+    return false;
   }
 
   // A trade has reached a final state (settled, cancelled, or parked in dispute)

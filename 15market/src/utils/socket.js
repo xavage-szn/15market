@@ -5,6 +5,7 @@ class SocketService {
     constructor() {
         this.socket = null;
         this.listeners = new Map(); // event -> Set of callbacks
+        this.connectHandlers = new Set(); // fired on every (re)connect
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 15;
         this.userRoom = null; // last joined user room — re-joined on every connect
@@ -28,9 +29,13 @@ class SocketService {
 
         this.socket = io(KEEPER_URL_ARC, {
             transports: ['websocket', 'polling'],
-            reconnectionAttempts: this.maxReconnectAttempts,
+            // Never stop trying: on a flaky link 15 attempts burn through in
+            // ~a minute and the socket used to die permanently after that —
+            // no live events until a full page reload. Back off hard instead
+            // (up to 30s between tries) and keep going forever.
+            reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
+            reconnectionDelayMax: 30000,
             timeout: getTimeout(),
             randomizationFactor: 0.5
         });
@@ -49,6 +54,12 @@ class SocketService {
             this.reconnectAttempts = 0;
             if (this.userRoom) {
                 this.socket.emit('join_user', this.userRoom);
+            }
+            // A reconnect means every live event in the gap was missed. Tell
+            // subscribers so the UI reconciles immediately instead of showing
+            // stale PENDING rows until the next poll cycle.
+            for (const cb of this.connectHandlers) {
+                try { cb(); } catch (_) {}
             }
         });
 
@@ -97,6 +108,13 @@ class SocketService {
         this.listeners.get(event).add(callback);
         this.socket.on(event, callback);
         return () => this.off(event, callback);
+    }
+
+    // Subscribe to (re)connects — e.g. to re-pull history the moment the
+    // link comes back, instead of waiting out the next poll cycle.
+    onConnect(callback) {
+        this.connectHandlers.add(callback);
+        return () => this.connectHandlers.delete(callback);
     }
 
     off(event, callback) {

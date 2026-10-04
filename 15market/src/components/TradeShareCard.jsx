@@ -1,6 +1,14 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Share2, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react';
+// Static, not dynamic. This component is itself lazy-loaded (UserApp.jsx), so
+// qrcode still lands in its own chunk and never in the initial bundle - but a
+// plain import cannot fail the way `import('qrcode')` could. The old dynamic
+// version swallowed every failure into `setQrDataUrl('')`, so a broken QR just
+// rendered as an empty box with no clue why. CircleWalletPage already imports
+// qrcode statically and works.
+import QRCode from 'qrcode';
+import { SITE_URL } from '../constants';
 
 const LOGO_MAP = {
   eth: '/ethusdc.png',
@@ -151,19 +159,26 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
   const logoSrc = getLogo(sym);
 
   useEffect(() => {
-    if (isOpen && trade) {
-      const verifyUrl = `https://15market.com/verify/${tradeId}`;
-      importOnce('qrcode').then(QRCode => {
-        QRCode.default.toDataURL(verifyUrl, {
-          width: 100,
-          margin: 1,
-          color: { dark: '#000000', light: '#ffffff' },
-          errorCorrectionLevel: 'M'
-        }).then(setQrDataUrl).catch(() => setQrDataUrl(''));
-      }).catch(() => setQrDataUrl(''));
-    }
-    return () => { setSaveState(null); };
-  }, [isOpen, trade, tradeId]);
+    if (!isOpen || !trade) return;
+    // Per-trade, so every card carries its own QR. Scanned, it lands on that
+    // trade's verify page.
+    const verifyUrl = `${SITE_URL}/verify/${encodeURIComponent(tradeId)}`;
+    let cancelled = false;
+    QRCode.toDataURL(verifyUrl, {
+      width: 100,
+      margin: 1,
+      color: { dark: '#000000', light: '#ffffff' },
+      errorCorrectionLevel: 'M'
+    })
+      .then(url => { if (!cancelled) setQrDataUrl(url); })
+      .catch(err => {
+        // Logged rather than swallowed: the old `catch(() => setQrDataUrl(''))`
+        // turned any failure into a silently blank QR box.
+        console.error('[ShareCard] QR generation failed for', verifyUrl, err);
+        if (!cancelled) setQrDataUrl('');
+      });
+    return () => { cancelled = true; setSaveState(null); };
+  }, [isOpen, tradeId]);
 
 const captureCard = async () => {
   const el = cardRef.current;

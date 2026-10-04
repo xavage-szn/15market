@@ -626,6 +626,19 @@ class ClassicEngine {
 
   async _placeTradeInner(tradeParams, identityPayload, userAddr, sessionWallet) {
 
+    // `profiles` is NOT in module scope in this file - it is required lazily
+    // inside methods to keep the cache <-> profiles require cycle from resolving
+    // to a half-initialised module at require time. So it has to be pulled in
+    // here, before the first use.
+    //
+    // It was missing, and that is why every funded trade died with
+    // `ReferenceError: profiles is not defined` at the idempotency gate below,
+    // which surfaced to the client as HTTP 500 from POST /session/execute. The
+    // five call sites here (claimBet and the four recordBetResult ledger writes)
+    // all sat in this function's scope, so this one binding covers them,
+    // including the receipt callback at the end.
+    const profiles = require('./profiles');
+
     const rawAmount = tradeParams.amount;
     const amount = Number(rawAmount);
     if (!rawAmount || isNaN(amount) || amount <= 0) {
@@ -797,8 +810,14 @@ class ClassicEngine {
     await cache.pushHistory(userAddr, trade);
     // Register in the durable open-trade set. cache.trades is in-memory, so this
     // is the only record that survives a restart and lets the settlement engine
-    // pick this bet back up if the process dies before it resolves.
-    cache.registerOpenTrade(trade);
+    // pick this bet back up if the process dies before it resolves. Awaited and
+    // retried: a silently-dropped registration used to strand the bet PENDING
+    // forever. On persistent failure the trade is queued in the file-backed
+    // outbox and a replayer keeps trying — an outage delays, never drops.
+    if (!(await cache.registerOpenTradeWithRetry(trade))) {
+      profiles.enqueueUnregistered(trade);
+      console.error(`[Place] #${trade.id} NOT in durable registry — queued for retry. Settles late, never lost.`);
+    }
     // Attach the tx hash to the claim row for audit and reconciler lookups.
     profiles.recordBetResult(trade.id, { stake_tx_hash: realHash, symbol });
     // Shared balance snapshot, so a cold instance (or a different device) can be
@@ -812,11 +831,15 @@ class ClassicEngine {
     });
 
     // ── VERIFY CONFIRMATION IN BACKGROUND ────────────────────────────────
-    rpc.waitForReceipt(realHash, 8, 3000).then(receipt => {
+    rpc.waitForReceipt(realHash, 8, 3000).then(async receipt => {
       if (!receipt || receipt.status !== 1) {
         console.error(`[Place] #${numericId} tx NOT confirmed. Reverting balance.`);
         cache.trades.delete(trade.id);
         cache.deleteCachedTradeResult(trade.id);
+        // Out of the durable registry too. A PENDING registry entry for a bet
+        // that never went live would be picked up by recovery and settled as
+        // if it were real — money moving on a dead trade.
+        await cache.resolveOpenTrade(trade.id);
         cache.pushHistory(userAddr, {
           ...trade,
           status: 'CANCELLED',

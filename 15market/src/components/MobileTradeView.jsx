@@ -239,12 +239,15 @@ function MobileSteppedChart({
     }
   }, [symbol, numericPrice, windowMs]);
 
-  // Listen to live Pyth / Binance websocket prices
+  // Listen to the BACKEND price relay only. The backend engine (cache.prices) is
+  // the single source of truth for settlement, so the chart must NEVER stream a
+  // different client-side feed (Binance/MEXC) or the drawn line can disagree with
+  // the settled verdict.
   useEffect(() => {
     const symKey = (symbol || 'ETHUSDT').replace('USDT', '').toLowerCase();
 
     const handlePrice = (data) => {
-      if (data && data.key === symKey) {
+      if (data && data.source === 'backend' && data.key === symKey) {
         const p = parseFloat(data.price);
         if (!isNaN(p) && p > 0) {
           targetPriceRef.current = p;
@@ -258,6 +261,24 @@ function MobileSteppedChart({
     const unbind = priceSocketService.on('price', handlePrice);
     return () => unbind();
   }, [symbol]);
+
+  // Prefer the backend engine's per-trade tick price when this symbol has an
+  // in-flight trade — that is the EXACT price the settlement compares against,
+  // so chart line, countdown and outcome can never disagree.
+  useEffect(() => {
+    const symKey = (symbol || 'ETHUSDT').replace('USDT', '').toLowerCase();
+    const active = (activeTradesRef.current || []).find(t =>
+      ['PENDING', 'RESOLVING'].includes(t.status) &&
+      (t.symbol || '').toLowerCase() === symKey
+    );
+    const p = active ? parseFloat(active.livePrice || active.lastTickPrice) : NaN;
+    if (!isNaN(p) && p > 0) {
+      targetPriceRef.current = p;
+      if (interpolatedPriceRef.current === null) {
+        interpolatedPriceRef.current = p;
+      }
+    }
+  }, [activeTrades, symbol]);
 
   // Sync with prop currentPrice if provided
   useEffect(() => {
@@ -872,6 +893,32 @@ export default function MobileTradeView({
 
   const currentStake = parseFloat(stakeInput) || 0;
 
+  // Safety: a trade the backend has failed to settle must never hold the widget
+  // hostage.
+  //
+  // This used to try to self-heal by writing TIMEOUT back into the parent's
+  // trade list via setActiveTrades - a prop this component is never given (it
+  // only receives the `activeTrades` array). The timer callback therefore threw
+  // a ReferenceError, the safety net never fired, and the trade stayed PENDING
+  // forever. Because isTradeActive keys off currentActiveTrade, the trading
+  // controls were never restored: the widget was simply unusable, with nothing
+  // on screen to say why.
+  //
+  // A child must not mutate the parent's list, so instead the decision is made
+  // here: once the grace window passes, the trade stops driving the countdown
+  // and the controls come back. The trade itself is untouched and stays PENDING
+  // in the history - an unsettled trade is never turned into a win or a loss
+  // here, it waits for a real verdict or for an admin to clear it in disputes.
+  //
+  // Declared ahead of `currentActiveTrade` below because that memo reads it:
+  // a `const` referenced above its own declaration is a TDZ ReferenceError,
+  // which took down the whole component on first render.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   // Find the current active trade (PENDING or RESOLVING), EXCLUDING one the
   // backend has already failed to settle. An overdue trade stops driving the
   // countdown so the controls return, but it is still in `activeTrades` and
@@ -894,28 +941,6 @@ export default function MobileTradeView({
   // that references remainingSec or tradeProgress in dependency arrays
   const [remainingSec, setRemainingSec] = useState(0);
   const [tradeProgress, setTradeProgress] = useState(0);
-
-  // Safety: a trade the backend has failed to settle must never hold the widget
-  // hostage.
-  //
-  // This used to try to self-heal by writing TIMEOUT back into the parent's
-  // trade list via setActiveTrades - a prop this component is never given (it
-  // only receives the `activeTrades` array). The timer callback therefore threw
-  // a ReferenceError, the safety net never fired, and the trade stayed PENDING
-  // forever. Because isTradeActive keys off currentActiveTrade, the trading
-  // controls were never restored: the widget was simply unusable, with nothing
-  // on screen to say why.
-  //
-  // A child must not mutate the parent's list, so instead the decision is made
-  // here: once the grace window passes, the trade stops driving the countdown
-  // and the controls come back. The trade itself is untouched and stays PENDING
-  // in the history - an unsettled trade is never turned into a win or a loss
-  // here, it waits for a real verdict or for an admin to clear it in disputes.
-  const [nowTick, setNowTick] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   // Display each authoritative settlement once.
   // Uses refs for timer to avoid cleanup issues from changing deps.
@@ -1337,9 +1362,9 @@ useEffect(() => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.25 }}
-            className="shrink-0 relative flex flex-col items-center justify-center gap-2 px-4 py-3 min-h-[56px] w-full"
+            className="shrink-0 relative flex flex-col items-center justify-center gap-2 px-4 py-3 min-h-[56px] w-full overflow-visible"
           >
-            {isExecuting && !currentActiveTrade ? (
+            {isExecuting && !currentActiveTrade && !(showOutcome && settledTrade) ? (
               <div className="flex items-center gap-2 text-[#17A364] animate-pulse text-[14px] font-black tracking-widest">
                 <div className="w-4 h-4 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
                 PLACING TRADE...
@@ -1369,6 +1394,12 @@ useEffect(() => {
                 // `currentActiveTrade` here meant the card for a settled result
                 // could be overridden by the state of an unrelated live one.
                 isPending={isTradeInFlight(settledTrade)}
+                fit
+                amount={settledTrade.amount}
+                payout={settledTrade.payout}
+                entryPrice={settledTrade.entryPrice}
+                exitPrice={settledTrade.settlementPrice || settledTrade.exitPrice}
+                symbol={settledTrade.symbol}
               />
             ) : null}
           </motion.div>
@@ -1583,7 +1614,7 @@ useEffect(() => {
                       <div className="flex items-center gap-2.5">
                         <div
                           className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-[11px] text-white ${
-                            isUp ? 'bg-[#17A364]' : 'bg-[#EE4B4B]'
+                            isUp ? 'bg-[#17A364]' : 'bg-[#EF5350]'
                           }`}
                         >
                           {isUp ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
@@ -1599,20 +1630,32 @@ useEffect(() => {
                       </div>
 
                       <div className="text-right">
-                        <div
-                          className={`text-[12px] font-black ${
-                            !settled ? 'text-[#FFB020]' : isWin ? 'text-[#17A364]' : 'text-[#EE4B4B]'
-                          }`}
-                        >
-                          {!settled
-                            ? statusLabel
-                            : isWin
-                              ? `+$${parseFloat(trade.payout || 0).toFixed(2)}`
-                              : 'LOST'}
-                        </div>
-                        <div className={`text-[9px] font-bold ${isLight ? 'text-gray-400' : 'text-white/40'}`}>
-                          {statusLabel}
-                        </div>
+                        {trade.status === 'PENDING' || trade.status === 'RESOLVING' ? (
+                          // Neutral in-motion state — NO win/lose verdict for active trades
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <div
+                              className={`w-3 h-3 rounded-full border-2 border-t-transparent animate-spin ${
+                                isLight ? 'border-[#111827]/60' : 'border-white/60'
+                              }`}
+                            />
+                            <div className={`text-[10px] font-black uppercase tracking-wider ${isLight ? 'text-[#111827]/70' : 'text-white/60'}`}>
+                              {trade.status === 'RESOLVING' ? 'Resolving' : 'Pending'}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div
+                              className={`text-[12px] font-black ${
+                                isWin ? 'text-[#17A364]' : 'text-[#EF5350]'
+                              }`}
+                            >
+                              {isWin ? `+$${parseFloat(trade.payout || 0).toFixed(2)}` : 'LOST'}
+                            </div>
+                            <div className={`text-[9px] font-bold ${isLight ? 'text-gray-400' : 'text-white/40'}`}>
+                              {trade.status || 'SETTLED'}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   );

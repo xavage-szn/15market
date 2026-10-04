@@ -276,6 +276,35 @@ async function recoverUnsettledTrades() {
       settleRetries: 0,
     };
     if (!trade.userAddr) { skipped++; continue; }
+    // Adopt a locked verdict that survived in Redis (1h TTL). Re-deciding
+    // from stale snapshots can flip the result, and for wins re-running
+    // settlement would re-credit an already-paid payout. A WON restore is
+    // parked as WON — every settle path refuses non-PENDING objects, so
+    // money can never move twice; its record still syncs once below.
+    try {
+      const locked = await cache.getCachedTradeResult(id);
+      if (locked && typeof locked.won === 'boolean') {
+        trade.lockedExitPrice = locked.exitPrice;
+        trade.lockedWon = locked.won;
+        trade.exitPrice = locked.exitPrice;
+        trade.won = locked.won;
+        trade.settledAt = locked.settledAt || Date.now();
+        if (locked.won) {
+          trade.status = 'WON';
+          const sp = Math.max(0.03, Math.min(0.97, Number(trade.sharePrice) || 0.50));
+          if (trade.amount && sp) {
+            const mult = (typeof classicEngine?.multiplierFor === 'function')
+              ? classicEngine.multiplierFor(trade.duration) : 2;
+            trade.payout = Math.max(0.000001, Math.min(
+              (Number(trade.amount) / sp) * 0.99,
+              Number(trade.amount) * mult * 0.99
+            ));
+          }
+          console.log(`[Recovery] #${id} adopted cached WON (no re-credit) — syncing record.`);
+          cache.pushHistory(trade.userAddr, { ...trade }).catch(() => {});
+        }
+      }
+    } catch {}
     cache.trades.set(id, trade);
     restored++;
   }
@@ -1620,6 +1649,69 @@ app.get('/history/:address', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── PUBLIC TRADE LOOKUP ───────────────────────────────────────────────────────
+// Backs the shared-card QR. Scanning https://<site>/verify/<id> lands here and
+// renders that trade's win/lose card, so this must work for a logged-out
+// visitor who has no wallet and no session.
+//
+// Read-only and unauthenticated by design: the card is a public social artifact
+// and everything returned is already public on-chain (the stake tx is on
+// ArcScan). Only card-relevant fields are projected - notably NOT sessionAddress,
+// which is the user's derived trading wallet.
+app.get('/trade/:id', async (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!id || id.length > 200) return res.status(400).json({ error: 'Missing trade id' });
+
+  // Live in-memory trades win: they are the only place a just-placed bet exists
+  // before the history write lands.
+  let trade = null;
+  for (const t of cache.trades.values()) {
+    if (String(t.id) === id || String(t.betId) === id ||
+        String(t.stakeTxHash || '').toLowerCase() === id.toLowerCase()) {
+      trade = t;
+      break;
+    }
+  }
+
+  if (!trade) {
+    try {
+      trade = await profiles.findTradePublic(id);
+    } catch (e) {
+      console.error(`[Trade] lookup ${id} failed:`, e?.message || e);
+      return res.status(500).json({ error: 'Trade lookup failed' });
+    }
+  }
+
+  if (!trade) return res.status(404).json({ error: 'Trade not found' });
+
+  // The card prints a handle when it can. Best effort - never fail the lookup.
+  let username = null;
+  try {
+    const owner = trade.userAddr || trade.userAddress || trade.user_address;
+    if (owner) username = profiles.get(String(owner).toLowerCase())?.username || null;
+  } catch { /* display-only */ }
+
+  res.json({
+    trade: {
+      id: String(trade.id ?? trade.betId ?? id),
+      betId: String(trade.betId ?? trade.id ?? id),
+      symbol: String(trade.symbol || '').toUpperCase(),
+      direction: trade.direction === 1 || String(trade.direction).toUpperCase() === 'UP' ? 'UP' : 'DOWN',
+      amount: Number(trade.amount || 0),
+      entryPrice: trade.entryPrice ?? null,
+      exitPrice: trade.exitPrice ?? trade.lockedExitPrice ?? null,
+      duration: trade.duration ?? null,
+      status: trade.status || (trade.won ? 'WON' : 'LOST'),
+      won: trade.won ?? ['WON', 'PAID'].includes(trade.status),
+      payout: Number(trade.payout ?? trade.payoutAmount ?? 0),
+      txHash: trade.stakeTxHash || trade.txHash || trade.tx || null,
+      timestamp: Number(trade.timestamp || trade.createdAt || trade.settledAt || 0),
+      userPublicKey: trade.userAddr || trade.userAddress || trade.user_public_key || null,
+      username
+    }
+  });
 });
 
 // ─── ON-DEMAND SETTLEMENT ─────────────────────────────────────────────────────

@@ -1601,57 +1601,61 @@ export function CircleWalletPage({
                                     initial={{ opacity: 0, scale: 0.9, x: 100 }}
                                     animate={{ opacity: 1, scale: 1, x: 0 }}
                                     exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                                    className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing ${isLight ? 'bg-white/90' : 'bg-[#0a0a0a]/90'} ${isLight ? 'border-2 border-[#249C6C] shadow-[0_40px_100px_rgba(0,0,0,0.25)]' : 'border-2 border-[#249C6C] shadow-[0_40px_100px_rgba(36, 156, 108,0.25)]'}`}
+                                    className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing ${isLight ? 'bg-white' : 'bg-[#0a0a0a]'} ${isLight ? 'border-2 border-[#249C6C] shadow-[0_40px_100px_rgba(0,0,0,0.25)]' : 'border-2 border-[#249C6C] shadow-[0_40px_100px_rgba(36, 156, 108,0.25)]'}`}
                                 >
                                     {/* Immersive Nature-Series Layer (Behind Texture) */}
                                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
                                         {/* Complex Topographic Texture */}
-                                        <svg className="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                            <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.15" />
-                                            <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.15" />
-                                            <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.15" />
-                                            <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.15" />
+                                        <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                            <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.2" />
+                                            <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.2" />
+                                            <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.2" />
+                                            <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.2" />
                                         </svg>
 
-                                        {/* Winding Road Path */}
-                                        <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-40" viewBox="0 0 200 100" preserveAspectRatio="none">
+                                        {/* Winding Road with Dashed Lines */}
+                                        <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-60" viewBox="0 0 200 100" preserveAspectRatio="none">
                                             <path
                                                 d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80"
                                                 fill="none"
                                                 stroke="white"
-                                                strokeWidth="10"
-                                                className="opacity-10"
+                                                strokeWidth="12"
+                                                className="opacity-20"
                                             />
                                             <path
                                                 d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80"
                                                 fill="none"
                                                 stroke="white"
-                                                strokeWidth="0.6"
+                                                strokeWidth="0.8"
                                                 strokeDasharray="4 6"
-                                                className="opacity-30"
+                                                className="opacity-60"
                                             />
                                         </svg>
 
-                                        {/* Pine Tree Silhouettes */}
-                                        <div className="absolute bottom-[15%] right-[12%] flex items-end gap-1 opacity-30">
-                                            <svg width="20" height="28" viewBox="0 0 24 32" fill="white">
+                                        {/* Detailed Pine Tree Clusters */}
+                                        <div className="absolute bottom-[10%] right-[10%] flex items-end gap-1 opacity-50">
+                                            <svg width="24" height="32" viewBox="0 0 24 32" fill="white">
                                                 <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
                                             </svg>
-                                            <svg width="14" height="20" viewBox="0 0 24 32" fill="white" className="opacity-60">
+                                            <svg width="18" height="24" viewBox="0 0 24 32" fill="white" className="opacity-70">
+                                                <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                            </svg>
+                                            <svg width="14" height="18" viewBox="0 0 24 32" fill="white" className="opacity-40">
                                                 <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
                                             </svg>
                                         </div>
 
-                                        {/* Geometric Icons (Plus/Cross) */}
-                                        <div className="absolute top-[20%] left-[45%] opacity-20">
-                                            <div className="relative w-3 h-3">
-                                                <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white" />
-                                                <div className="absolute top-0 left-1/2 w-[1px] h-full bg-white" />
-                                            </div>
-                                        </div>
-                                        <div className="absolute bottom-[30%] left-[20%] opacity-10 grid grid-cols-2 gap-2">
-                                            <div className="w-1 h-1 rounded-full bg-white" />
-                                            <div className="w-1 h-1 rounded-full bg-white" />
+                                        {/* Geometric Accents (Dots & Plus) */}
+                                        <div className="absolute top-[15%] left-[40%] w-1.5 h-[1px] bg-white opacity-40 rotate-45" />
+                                        <div className="absolute top-[15%] left-[40%] h-1.5 w-[1px] bg-white opacity-40 rotate-45" />
+
+                                        <div className="absolute bottom-[40%] right-[20%] grid grid-cols-3 gap-1.5 opacity-20">
+                                            <div className="w-0.5 h-0.5 bg-white rounded-full" />
+                                            <div className="w-0.5 h-0.5 bg-white rounded-full" />
+                                            <div className="w-0.5 h-0.5 bg-white rounded-full" />
+                                            <div className="w-0.5 h-0.5 bg-white rounded-full" />
+                                            <div className="w-0.5 h-0.5 bg-white rounded-full" />
+                                            <div className="w-0.5 h-0.5 bg-white rounded-full" />
                                         </div>
                                     </div>
 

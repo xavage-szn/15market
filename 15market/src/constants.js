@@ -118,6 +118,31 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 // back to a dead host and every balance request failed.
 const PRODUCTION_BACKEND = "https://api.15market.online";
 
+// Canonical FRONTEND origin. Anything a user can scan or share has to point at
+// the host that actually serves the app, so it belongs here next to the backend
+// constant rather than being hardcoded per component.
+//
+// Derived from window.location.origin on any real (non-loopback) host, which
+// keeps preview/tunnel origins self-correcting, and pinned to production on
+// localhost so a QR generated during local dev still opens the live site
+// instead of a dead http://localhost link.
+const isLoopbackHost = (hostname) =>
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]' ||
+    /^192\.168\./.test(hostname) ||
+    /^10\./.test(hostname) ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
+
+const PRODUCTION_SITE = "https://15market.online";
+
+export const SITE_URL = (typeof window !== 'undefined' &&
+    window.location &&
+    window.location.origin &&
+    !isLoopbackHost(window.location.hostname))
+    ? window.location.origin
+    : PRODUCTION_SITE;
+
 const getBaseUrl = (envValue) => {
     // Absolute env URLs always win (works for local + production).
     if (envValue && (envValue.startsWith('http://') || envValue.startsWith('https://'))) {

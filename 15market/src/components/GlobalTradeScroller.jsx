@@ -199,7 +199,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
         : 'text-white';
 
     return (
-        <div className={`w-full ${isV1 ? 'h-5 md:h-6 lg:h-10 ' + v1Bg : 'h-7 md:h-7 lg:h-10 bg-[#17A364] text-white'} relative z-[45] overflow-hidden`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+        <div className={`w-full ${isV1 ? 'h-5 md:h-6 lg:h-10 ' + v1Bg : 'h-7 md:h-7 lg:h-10 bg-[#17A364] text-white zigzag-ticker'} relative z-[45] overflow-hidden`} style={{ fontFamily: '"Comfortaa", cursive' }}>
             {/* Smooth Transition Layer for Broadcasts */}
             <AnimatePresence mode="wait">
                 {(activeBroadcast || (isCampaignWindow && campaignBroadcast)) ? (
@@ -268,6 +268,9 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                     </motion.div>
                 )}
             </AnimatePresence>
+            {/* Green loading-modal background, exactly as GlobalLoader: the
+                same carbon-fibre texture at the same opacity over the green. */}
+            <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
         </div>
     );
 }

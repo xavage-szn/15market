@@ -123,15 +123,30 @@ export default function TradeHistoryTable({
   const [verifying, setVerifying] = useState(false);
   const [showVerifier, setShowVerifier] = useState(false);
 
-  const merged = [...activeTrades, ...tradeHistory];
-  const seen = new Set();
+  // Status priority map (higher value = more resolved/final)
+  const statusRank = { PAID: 5, WON: 5, LOST: 5, PAYOUT_FAILED: 5, CANCELLED: 4, DISPUTE: 3, RESOLVING: 2, PENDING: 1, TIMEOUT: 0 };
+  const getTradeKey = (t) => String(t.id || t.betId || t.tx || t.txHash || t.nonce || '');
+
+  // Merge tradeHistory and activeTrades with highest status rank winning
+  const mergedMap = new Map();
+  [...tradeHistory, ...activeTrades].forEach((trade) => {
+    const key = getTradeKey(trade) || JSON.stringify(trade);
+    const existing = mergedMap.get(key);
+    if (!existing) {
+      mergedMap.set(key, trade);
+    } else {
+      const curRank = statusRank[String(trade.status || '').toUpperCase()] || 0;
+      const exRank = statusRank[String(existing.status || '').toUpperCase()] || 0;
+      if (curRank >= exRank) {
+        mergedMap.set(key, { ...existing, ...trade });
+      } else {
+        mergedMap.set(key, { ...trade, ...existing });
+      }
+    }
+  });
+
   const displayTrades = hasRealTrades
-    ? merged.filter((trade) => {
-        const key = String(trade.id || trade.tx || trade.nonce || JSON.stringify(trade));
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
+    ? Array.from(mergedMap.values()).sort((a, b) => (b.timestamp || b.startTime || 0) - (a.timestamp || a.startTime || 0))
     : [
         { id: 'mock-1', timestamp: Date.now() - 5000, symbol: 'ETH', direction: 'UP', amount: 10.0, payout: 16.39, status: 'WON' },
         { id: 'mock-2', timestamp: Date.now() - 20000, symbol: 'BTC', direction: 'DOWN', amount: 8.5, payout: 0, status: 'LOST' },
@@ -297,9 +312,10 @@ export default function TradeHistoryTable({
         {/* Trade rows list divided by horizontal lines */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {displayTrades.map((trade, idx) => {
-            const isWin = trade.status === 'WON' || trade.status === 'PAID' || trade.result === 'WIN' || trade.payout > 0;
-            const isLost = trade.status === 'LOST' || (trade.status === 'RESOLVED' && trade.payout === 0);
-            const isActive = !isWin && !isLost && trade.status !== 'CANCELLED';
+            const isSettled = isTradeSettled(trade) || ['WON', 'LOST', 'PAID', 'RESOLVED', 'CANCELLED'].includes(String(trade.status || '').toUpperCase()) || typeof trade.won === 'boolean';
+            const isWin = isSettled && (trade.won === true || ['WON', 'PAID'].includes(String(trade.status || '').toUpperCase()) || trade.result === 'WIN' || Number(trade.payout || 0) > 0);
+            const isLost = isSettled && !isWin && trade.status !== 'CANCELLED';
+            const isActive = !isSettled;
             const isUp = trade.direction === 'UP' || trade.direction === 'YES' || trade.direction === 1 || String(trade.direction) === '1';
             const sym = (trade.symbol || 'ETH').toUpperCase().replace('USDT', '');
             const txHash = trade.tx || trade.txHash || trade.stakeTxHash;
@@ -325,7 +341,7 @@ export default function TradeHistoryTable({
                       </span>
                       <span
                         className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                          isUp ? 'bg-[#17A364]/15 text-[#17A364]' : 'bg-[#EF4444]/15 text-[#EF4444]'
+                          isUp ? 'bg-[#17A364]/15 text-[#17A364]' : 'bg-[#EF5350]/15 text-[#EF5350]'
                         }`}
                       >
                         {isUp ? <ArrowUp size={9} /> : <ArrowDown size={9} />}
@@ -364,7 +380,7 @@ export default function TradeHistoryTable({
                         +${Number(trade.payout || 0).toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-[13px] font-black text-[#EF4444] tabular-nums">
+                      <span className="text-[13px] font-black text-[#EF5350] tabular-nums">
                         -${Number(trade.amount || 0).toFixed(2)}
                       </span>
                     )}
@@ -451,9 +467,10 @@ export default function TradeHistoryTable({
         className="flex items-center gap-5 px-1 overflow-x-auto scrollbar-none whitespace-nowrap"
       >
         {displayTrades.map((trade, idx) => {
-          const isWin = trade.status === 'WON' || (trade.payout > 0);
-          const isLost = trade.status === 'LOST' || (trade.status === 'RESOLVED' && trade.payout === 0);
-          const isActive = !isWin && !isLost && trade.status !== 'CANCELLED';
+          const isSettled = isTradeSettled(trade) || ['WON', 'LOST', 'PAID', 'RESOLVED', 'CANCELLED'].includes(String(trade.status || '').toUpperCase()) || typeof trade.won === 'boolean';
+          const isWin = isSettled && (trade.won === true || ['WON', 'PAID'].includes(String(trade.status || '').toUpperCase()) || trade.result === 'WIN' || Number(trade.payout || 0) > 0);
+          const isLost = isSettled && !isWin && trade.status !== 'CANCELLED';
+          const isActive = !isSettled;
 
           return (
             <div 

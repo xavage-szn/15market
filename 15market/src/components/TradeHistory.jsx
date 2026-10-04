@@ -119,6 +119,13 @@ function TradeHistoryComponent({
                                                         </div>
                                                     )}
                                                 </div>
+                                            ) : t.status === 'RESOLVING' ? (
+                                                <div className="flex items-center gap-1.5">
+                                                    <Loader2 size={10} className="animate-spin opacity-60" />
+                                                    <span>RESOLVING</span>
+                                                </div>
+                                            ) : t.status === 'PENDING' ? (
+                                                <span>PENDING</span>
                                             ) : (
                                                 <span>{t.status}</span>
                                             )}
@@ -132,7 +139,7 @@ function TradeHistoryComponent({
                                                     <ExternalLink size={14} />
                                                 </a>
                                             )}
-                                            {t.status !== "PENDING" && (
+                                            {t.status !== "PENDING" && t.status !== "RESOLVING" && (
                                                 <button
                                                     onClick={(e) => {
                                                         e.preventDefault();

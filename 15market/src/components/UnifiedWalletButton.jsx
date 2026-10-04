@@ -11,7 +11,7 @@ export function UnifiedWalletButton({ theme }) {
     const connectedChainId = useChainId();
     const { disconnect } = useDisconnect();
     const { switchChain } = useSwitchChain();
-    const { login, logout, authenticated, user } = usePrivy();
+    const { login, logout, authenticated, user, ready } = usePrivy();
     const { isSmartWalletReady } = useTradingWallet();
     
     // Auto-switch to Arc Testnet if wallet is on any other network
@@ -64,6 +64,23 @@ export function UnifiedWalletButton({ theme }) {
 
     // Use Privy's authenticated state or Wagmi's isConnected
     const isActuallyConnected = isConnected || authenticated;
+
+    // Privy rehydrates its session out of localStorage asynchronously, and wagmi
+    // reconnects on its own schedule. Until BOTH have settled, `authenticated`
+    // and `isConnected` are both false — indistinguishable from a signed-out
+    // user. That made the "Signup / Login" button render on every single page
+    // load, so a refresh flashed a login prompt at an already-signed-in user
+    // and, on a slow link, invited them to click it and start a fresh login.
+    // Wait for `ready` and hold an inert placeholder of the same footprint so
+    // there is no layout shift.
+    if (!ready) {
+        return (
+            <div
+                aria-hidden="true"
+                className="w-[70px] h-[34px] lg:w-[92px] lg:h-[42px] rounded-xl bg-white/5 border border-white/10 animate-pulse"
+            />
+        );
+    }
 
     if (!isActuallyConnected) {
         return (

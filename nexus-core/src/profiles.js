@@ -3,6 +3,12 @@ const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE_PATH = path.join(DATA_DIR, 'profiles.json');
+// Durability outbox: every trade that reached a store durably EXCEPT the one
+// that was down at the time. Two lists — bets missing from the Redis
+// open-trade registry, and settled records whose Supabase upsert failed.
+// Replayed on an interval until the store confirms, so an outage delays
+// settlement visibility but can never silently drop a result.
+const OUTBOX_PATH = path.join(DATA_DIR, 'durability.json');
 
 // Ensure data directory exists
 try {
@@ -30,25 +36,76 @@ function supabaseHeaders() {
     };
 }
 
+// undici reports every transport-level problem as a bare "fetch failed" and
+// hides the actionable part on err.cause (ECONNRESET, UND_ERR_SOCKET, ENOTFOUND,
+// CERT_HAS_EXPIRED, ...). Callers only ever logged err.message, so a dropped
+// connection and a TLS failure were indistinguishable from the log alone.
+// Render the whole chain instead.
+const describeFetchError = (err) => {
+    const parts = [];
+    let e = err;
+    let depth = 0;
+    while (e && depth < 5) {
+        parts.push(`${e.name || 'Error'}${e.code ? ` [${e.code}]` : ''}: ${e.message}`);
+        e = e.cause;
+        depth++;
+    }
+    return parts.join(' <- ');
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const supabaseRequest = async (path, options = {}) => {
     // Supabase is cross-region from Render and measured ~8.4s for a bare
-// reachability check, so the previous 8s default sat right on the edge: profile
-// loads aborted mid-flight and silently degraded to the local file fallback. On
-// Render's ephemeral disk that fallback is effectively an empty profile store,
-// which loses onboarding state, the chain baseline and the persisted balance.
-// Durability beats speed here, so allow a slow-but-valid response to land.
-const { timeout = 25000, ...fetchOptions } = options;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-    try {
-        return await fetch(`${SUPABASE_URL}${path}`, {
-            ...fetchOptions,
-            signal: controller.signal,
-            headers: { ...supabaseHeaders(), ...(fetchOptions.headers || {}) }
-        });
-    } finally {
-        clearTimeout(timer);
+    // reachability check, so the previous 8s default sat right on the edge: profile
+    // loads aborted mid-flight and silently degraded to the local file fallback. On
+    // Render's ephemeral disk that fallback is effectively an empty profile store,
+    // which loses onboarding state, the chain baseline and the persisted balance.
+    // Durability beats speed here, so allow a slow-but-valid response to land.
+    const { timeout = 25000, retries = 2, ...fetchOptions } = options;
+
+    // `timeout` is the TOTAL budget across all attempts, not per attempt, so
+    // adding retries does not change how long any caller waits - including the
+    // 30s AbortController on the frontend's /session/execute request.
+    const deadline = Date.now() + timeout;
+    let lastErr = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), remaining);
+        try {
+            return await fetch(`${SUPABASE_URL}${path}`, {
+                ...fetchOptions,
+                signal: controller.signal,
+                headers: { ...supabaseHeaders(), ...(fetchOptions.headers || {}) }
+            });
+        } catch (e) {
+            lastErr = e;
+            if (attempt === retries) break;
+
+            // Backoff with jitter, and only for transport failures - an HTTP
+            // status is a real answer and is returned to the caller untouched.
+            //
+            // The wait is the actual fix. Supabase sits behind Cloudflare, which
+            // reaps idle connections, while undici keeps them pooled: a request
+            // handed a socket the peer already closed fails with ECONNRESET /
+            // UND_ERR_SOCKET. undici evicts a socket once it errors, so the retry
+            // has to wait for that to happen. syncToSupabase used to retry four
+            // times with no delay at all, so all four landed within milliseconds
+            // on the same poisoned connection and all four failed identically -
+            // one "fetch failed" for what was really a single dropped socket.
+            const backoff = 250 * Math.pow(2, attempt) + Math.floor(Math.random() * 150);
+            if (Date.now() + backoff >= deadline) break;
+            await sleep(backoff);
+        } finally {
+            clearTimeout(timer);
+        }
     }
+
+    throw new Error(`Supabase request failed: ${describeFetchError(lastErr)}`);
 };
 
 function normalizeStoredTrade(trade) {
@@ -287,6 +344,112 @@ class ProfileService {
 
         // Periodic local fallback snapshot (file only — Redis is not used for profiles).
         setInterval(() => this.save(), 10000);
+
+        // Durability outbox: replay failed registry/persistence writes until
+        // the store confirms. An outage delays, never drops.
+        this._durability = { unregistered: [], unsynced: [] };
+        this._loadDurability();
+        setInterval(() => this.replayDurability().catch(e =>
+            console.warn('[Durability] replay failed:', e.message)), 20000);
+    }
+
+    _loadDurability() {
+        try {
+            if (fs.existsSync(OUTBOX_PATH)) {
+                const data = JSON.parse(fs.readFileSync(OUTBOX_PATH, 'utf8'));
+                if (Array.isArray(data.unregistered)) this._durability.unregistered = data.unregistered;
+                if (Array.isArray(data.unsynced)) this._durability.unsynced = data.unsynced;
+                const n = this._durability.unregistered.length + this._durability.unsynced.length;
+                if (n > 0) console.log(`[Durability] Loaded ${n} pending write(s) from outbox.`);
+            }
+        } catch (e) {
+            console.warn('[Durability] Failed to load outbox:', e.message);
+        }
+    }
+
+    _saveDurability() {
+        try {
+            fs.writeFileSync(OUTBOX_PATH, JSON.stringify(this._durability));
+        } catch (e) { /* never throw upward from bookkeeping */ }
+    }
+
+    // A placed bet that never reached the Redis open-trade registry (Redis was
+    // down after the on-chain broadcast). Without this entry the settlement
+    // engine has nothing to find after a restart — the trade would sit PENDING
+    // forever with no verdict.
+    enqueueUnregistered(trade) {
+        const id = String(trade?.id || trade?.betId || '');
+        if (!id) return;
+        const list = this._durability.unregistered;
+        if (!list.some(e => String(e.id) === id)) {
+            list.push({ ...trade, id, attempts: 0, updatedAt: Date.now() });
+            if (list.length > 2000) console.error('[Durability] unregistered list over 2000 — check Redis.');
+            this._saveDurability();
+        }
+    }
+
+    // A settled record whose Supabase upsert failed. Replayed verbatim until
+    // the database confirms the write.
+    enqueueUnsynced(addr, trade) {
+        const id = String(trade?.id || trade?.betId || '');
+        if (!id) return;
+        const list = this._durability.unsynced;
+        const existing = list.find(e => String(e.id) === id);
+        if (existing) {
+            existing.trade = trade;
+            existing.updatedAt = Date.now();
+        } else {
+            list.push({ id, addr: String(addr || '').toLowerCase(), trade, attempts: 0, updatedAt: Date.now() });
+            if (list.length > 2000) console.error('[Durability] unsynced list over 2000 — check Supabase.');
+        }
+        this._saveDurability();
+    }
+
+    removeDurability(id) {
+        const key = String(id || '');
+        if (!key) return;
+        let changed = false;
+        for (const listName of ['unregistered', 'unsynced']) {
+            const list = this._durability[listName];
+            const idx = list.findIndex(e => String(e.id) === key);
+            if (idx !== -1) { list.splice(idx, 1); changed = true; }
+        }
+        if (changed) this._saveDurability();
+    }
+
+    async replayDurability() {
+        const cache = require('./cache');
+        for (const entry of [...this._durability.unregistered]) {
+            try {
+                if (await cache.registerOpenTrade(entry)) {
+                    this.removeDurability(entry.id);
+                    console.log(`[Durability] Registered #${entry.id} in open-trade set (attempt ${entry.attempts + 1}).`);
+                } else {
+                    entry.attempts = (entry.attempts || 0) + 1;
+                    entry.updatedAt = Date.now();
+                    console.warn(`[Durability] #${entry.id} still unregistered (attempt ${entry.attempts}).`);
+                }
+            } catch (e) {
+                entry.attempts = (entry.attempts || 0) + 1;
+                console.warn(`[Durability] #${entry.id} register failed:`, e.message);
+            }
+        }
+        for (const entry of [...this._durability.unsynced]) {
+            try {
+                if (await this.persistTradeToSupabase(entry.addr, entry.trade, true)) {
+                    this.removeDurability(entry.id);
+                    console.log(`[Durability] Synced #${entry.id} to Supabase (attempt ${entry.attempts + 1}).`);
+                } else {
+                    entry.attempts = (entry.attempts || 0) + 1;
+                    entry.updatedAt = Date.now();
+                    console.warn(`[Durability] #${entry.id} still unsynced (attempt ${entry.attempts}).`);
+                }
+            } catch (e) {
+                entry.attempts = (entry.attempts || 0) + 1;
+                console.warn(`[Durability] #${entry.id} sync failed:`, e.message);
+            }
+        }
+        this._saveDurability();
     }
 
     // ── Supabase durability layer ──────────────────────────────
@@ -519,6 +682,44 @@ class ProfileService {
         }
     }
 
+    /**
+     * Resolve a single trade by bet id or stake tx hash.
+     *
+     * Public lookup - no owner address is known up front, which is what a shared
+     * card link carries. Used by GET /trade/:id so a scanned QR (and the
+     * "verify" box, which accepts either form) can find the trade.
+     *
+     * Returns the same record shape as getHistoryAsync so the share card
+     * renders it identically to a locally-known trade.
+     */
+    async findTradePublic(identifier) {
+        const q = String(identifier || '').trim();
+        if (!q || q.length > 200) return null;
+        await this.initSupabase();
+        if (!this.sbTradeTableAvailable) return null;
+
+        // Bet ids are numeric; a tx hash is 0x-prefixed hex. Only the id is
+        // worth an equality probe, otherwise send it as a hash filter.
+        const isBetId = /^\d+$/.test(q);
+        const path = isBetId
+            ? `/rest/v1/trades?select=*&id=eq.${encodeURIComponent(q)}&limit=1`
+            : `/rest/v1/trades?select=*&or=(stake_tx_hash.eq.${encodeURIComponent(q)},tx_hash.eq.${encodeURIComponent(q)})&limit=1`;
+
+        try {
+            const res = await supabaseRequest(path, { timeout: 10000 });
+            if (!res.ok) {
+                if (res.status >= 400 && res.status < 500) this.sbTradeTableAvailable = false;
+                return null;
+            }
+            const rows = await res.json();
+            if (!Array.isArray(rows) || !rows.length) return null;
+            return supabaseTradeToRecord(rows[0]);
+        } catch (e) {
+            console.warn('[Profiles] findTradePublic failed:', e.message);
+            return null;
+        }
+    }
+
     // Record the tx hash once broadcast succeeds, and mark the final status.
     // Failure here is logged, never thrown: the claim already guarantees the
     // bet cannot be replayed, so this row is audit data, not the lock.
@@ -589,9 +790,36 @@ class ProfileService {
             for (const row of rows) {
                 const addr = String(row.address || '').toLowerCase();
                 if (!addr) continue;
-                // Supabase values win; keep local-only fields (e.g. trades
-                // when the optional columns aren't present yet).
-                this.profiles[addr] = { ...(this.profiles[addr] || {}), ...rowToProfile(row), address: addr };
+                const remote = { ...rowToProfile(row), address: addr };
+                const local = this.profiles[addr];
+                // Trades merge by id with status-rank precedence (same rule as
+                // getHistoryAsync). A stale remote PENDING must NEVER overwrite
+                // a locally settled verdict: a boot during an outage used to
+                // destroy settled trades this way, and the periodic file save
+                // then cemented the regression into every store at once.
+                // Profile FIELDS still take remote values; only trades merge.
+                if (local && Array.isArray(local.trades) && Array.isArray(remote.trades)) {
+                    const byId = new Map();
+                    for (const t of remote.trades) {
+                        const key = String(t?.id || t?.betId || '');
+                        if (key) byId.set(key, t);
+                    }
+                    for (const t of local.trades) {
+                        if (!isBetRecord(t)) continue;
+                        const key = String(t.id || t.betId || '');
+                        if (!key) continue;
+                        const r = byId.get(key);
+                        const lr = tradeStatusRank(t.status);
+                        const rr = tradeStatusRank(r?.status);
+                        const lt = Number(t.settledAt || t.timestamp || 0);
+                        const rt = Number(r?.settledAt || r?.timestamp || 0);
+                        if (!r || lr > rr || (lr === rr && lt >= rt)) byId.set(key, t);
+                    }
+                    remote.trades = Array.from(byId.values());
+                }
+                // Supabase values win for fields; keep local-only fields (e.g.
+                // trades when the optional columns aren't present yet).
+                this.profiles[addr] = { ...(local || {}), ...remote, address: addr };
                 merged++;
             }
             if (merged > 0) console.log(`[Supabase] Loaded ${merged} profile(s) into cache.`);
@@ -654,12 +882,19 @@ class ProfileService {
                     // stop paying for rejected round-trips.
                     if (i === 2) this.sbFullPayload = false;
                     else if (i === 3) this.sbChainReconAvailable = false;
+                    // Drain the body so undici can return the socket to the pool.
+                    await res.text().catch(() => {});
                     return true;
                 }
                 if (i === 0 && this.sbFullPayload !== false) this.sbFullPayload = false;
                 lastError = `${res.status} ${await res.text().catch(() => '')}`.slice(0, 300);
             } catch (e) {
                 lastError = e.message;
+                // The four payload variants exist to work around a *rejected
+                // column* (HTTP 400). A transport failure rejects all of them
+                // identically, so stop instead of burning 4x the timeout budget
+                // re-sending the same dead request.
+                break;
             }
         }
         console.warn(`[Supabase] Upsert failed for ${addr}: ${lastError}`);
@@ -896,7 +1131,7 @@ class ProfileService {
     async collectUnsettledFallbacks() {
         const out = [];
         try {
-            const cache = require('../cache');
+            const cache = require('./cache');
             const open = await cache.listOpenTrades();
             for (const t of open) {
                 const status = String(t.status || '').toUpperCase();
@@ -965,7 +1200,13 @@ class ProfileService {
         if (!this.sbTradeTableAvailable) return false;
         const addr = address.toLowerCase();
         if (!this.profiles[addr]) return false;
-        if (!(await this.syncToSupabase(addr))) return false;
+
+        // The profile row and the trade row are independent tables, so a failed
+        // profile upsert must NOT gate the trade insert. It used to: one dropped
+        // connection during syncToSupabase made this return false before the
+        // trade was ever attempted, and the trade then never reached the `trades`
+        // table at all - so it silently vanished from history. Best-effort now.
+        await this.syncToSupabase(addr);
 
         try {
             const res = await supabaseRequest('/rest/v1/trades?on_conflict=id', {
@@ -977,6 +1218,9 @@ class ProfileService {
                 console.warn(`[Supabase] Trade upsert failed for ${addr}: ${res.status} ${await res.text().catch(() => '')}`.slice(0, 350));
                 return false;
             }
+            // Drain the body so undici can release the socket back to the pool.
+            // Skipping it leaves the connection occupied until GC.
+            await res.text().catch(() => {});
             return true;
         } catch (e) {
             console.warn(`[Supabase] Trade upsert error for ${addr}:`, e.message);
@@ -1020,7 +1264,17 @@ class ProfileService {
                 console.warn(`[Supabase] Trade persistence failed for ${addr}:`, e.message);
                 return false;
             })
-            .then(() => record);
+            .then((ok) => {
+                // A settled record that missed the database must be replayed,
+                // not dropped: enqueue it so the replayer keeps trying until
+                // Supabase confirms. Non-terminal records re-persist on every
+                // later write of the same trade, so they need no entry.
+                if (tradeStatusRank(record.status) >= 4) {
+                    if (ok) this.removeDurability(record.id || record.betId);
+                    else this.enqueueUnsynced(addr, record);
+                }
+                return record;
+            });
     }
 
     updateTrade(address, betId, updates) {
@@ -1038,7 +1292,15 @@ class ProfileService {
 
         profile.updatedAt = Date.now();
         this.save().catch(e => console.warn('[Profiles] Background save failed:', e.message));
-        this.persistTradeToSupabase(addr, profile.trades[tradeIdx]).catch(() => {});
+        this.persistTradeToSupabase(addr, profile.trades[tradeIdx])
+            .then((ok) => {
+                const rec = profile.trades[tradeIdx];
+                if (tradeStatusRank(rec?.status) >= 4) {
+                    if (ok) this.removeDurability(rec.id || rec.betId);
+                    else this.enqueueUnsynced(addr, rec);
+                }
+            })
+            .catch(() => {});
         return true;
     }
 

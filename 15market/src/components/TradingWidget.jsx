@@ -173,11 +173,11 @@ function ResolvingOutcome({ isLight }) {
   );
 }
 
-// 4. TRADE OUTCOME — rounds-style compact result reveal (compact live status card).
-// Replaces the "million dollar" cinematic with the ROUNDS compact live status card:
-// tinted rounded card + italic tracking-widest WIN/LOSS lettering, kept at the
-// current animation container size (not stretched to the chart widget size).
-function TradeOutcome({ won, isLight, isPending }) {
+// 4. TRADE OUTCOME — Clean premium result reveal.
+// Desktop: compact horizontal layout with icon orb, staggered letter reveal,
+// and counting payout — all sized to fit the ~104px action-area strip.
+// Mobile (fit): compact in-flow pill.
+function TradeOutcome({ won, isLight, isPending, settled, phase, fit, amount, payout, entryPrice, exitPrice, symbol, onExpire }) {
   if (isPending) {
     return (
       <motion.div
@@ -201,64 +201,232 @@ function TradeOutcome({ won, isLight, isPending }) {
       </motion.div>
     );
   }
-  // Entrance on mount, then exit after 3 seconds so it "animates in and out".
+
+  const isResultPhase = settled || phase === 'settled';
   const [gone, setGone] = useState(false);
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => { onExpireRef.current = onExpire; });
   useEffect(() => {
-    const t = setTimeout(() => setGone(true), 3000);
+    if (!isResultPhase) return;
+    const t = setTimeout(() => {
+      setGone(true);
+      onExpireRef.current?.();
+    }, 5000);
     return () => clearTimeout(t);
-  }, []);
+  }, [isResultPhase]);
 
-  const exit = { opacity: 0, scale: 0.8, filter: 'blur(4px)' };
+  const [countDisp, setCountDisp] = useState(0);
+  useEffect(() => {
+    if (!isResultPhase || !won || (Number(payout) || 0) <= 0) return;
+    const target = Number(payout) || 0;
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / 900);
+      setCountDisp(target * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [isResultPhase]);
+
   const enter = { opacity: 1, scale: 1, filter: 'blur(0px)' };
-
   const isWin = !!won;
   const cardClass = isWin
     ? 'bg-[#17A364]/15 border-[#17A364]/30'
     : 'bg-[#FF7F50]/15 border-[#FF7F50]/40';
   const textClass = isWin ? 'text-[#17A364]' : 'text-[#FF7F50]';
 
+  const stakeStr = (amount != null && !isNaN(Number(amount))) ? `$${Number(amount).toFixed(2)}` : null;
+  const payoutStr = (payout != null && !isNaN(Number(payout)) && Number(payout) > 0) ? `+$${Number(payout).toFixed(2)}` : null;
+  const entryStr = (entryPrice != null && !isNaN(Number(entryPrice))) ? Number(entryPrice).toFixed(2) : null;
+  const exitStr = (exitPrice != null && !isNaN(Number(exitPrice)) && Number(exitPrice) > 0) ? Number(exitPrice).toFixed(2) : null;
+
+  const resultRow = (
+    <>
+      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isWin ? 'bg-[#17A364] text-white' : 'bg-[#FF7F50] text-white'}`}>
+        <motion.svg
+          viewBox="0 0 24 24"
+          width="13"
+          height="13"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          animate={{ scale: [1, 1.15, 1], opacity: [0.8, 1, 0.8] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          {isWin ? <path d="M5 13l4 4L19 7" /> : <path d="M6 6l12 12M18 6L6 18" />}
+        </motion.svg>
+      </div>
+      <motion.span
+        animate={{ opacity: [1, 0.7, 1] }}
+        transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+        className={`${fit ? 'text-[13px]' : 'text-[15px]'} font-black italic tracking-widest ${textClass}`}
+        style={{ filter: `drop-shadow(0 0 10px ${isWin ? 'rgba(23,163,100,0.5)' : 'rgba(255,127,80,0.5)'})` }}
+      >
+        {isWin ? 'WIN' : 'LOSS'}{symbol ? ` · ${String(symbol).toUpperCase()}` : ''}
+      </motion.span>
+    </>
+  );
+
+  // FIT MODE (mobile) — compact in-flow pill, unchanged.
+  if (fit) {
+    return (
+      <motion.div
+        initial={enter}
+        animate={enter}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+        className="w-full max-w-full overflow-visible flex items-center justify-center"
+      >
+        <motion.div
+          initial={{ opacity: 0, y: -8, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          className={`px-4 py-2 rounded-[20px] border flex flex-col items-center justify-center gap-1 select-none shadow-lg w-full max-w-full overflow-visible ${cardClass}`}
+        >
+          <div className="flex items-center justify-center gap-2 w-full max-w-full">{resultRow}</div>
+          {(payoutStr || stakeStr || (entryStr && exitStr)) && (
+            <div className={`flex items-center justify-center gap-2 text-[10px] font-black tabular-nums max-w-full flex-wrap ${isLight ? 'text-[#0a261a]/70' : 'text-white/70'}`}>
+              {payoutStr && <span className={textClass}>{payoutStr}</span>}
+              {stakeStr && <span className="opacity-70">Stake {stakeStr}</span>}
+              {(entryStr && exitStr) && <span className="opacity-50">${entryStr} → ${exitStr}</span>}
+            </div>
+          )}
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  // ─── DESKTOP: ultra-clean modern verdict ───────────────────────────────────
+  const resultWon = !!won;
+  const word = resultWon ? 'WON' : 'LOST';
+
+  // Colors — theme-aware. Loss is the NO-button red, both themes.
+  const accentGlow = resultWon ? 'rgba(23,163,100,0.35)' : 'rgba(239,83,80,0.3)';
+
+  const textColor = resultWon
+    ? (isLight ? 'text-[#17A364]' : 'text-[#22C55E]')
+    : 'text-[#EF5350]';
+
   return (
     <motion.div
-      initial={enter}
-      animate={gone ? exit : enter}
-      transition={{ duration: gone ? 0.6 : 0.5, ease: "easeInOut" }}
-      className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-2xl px-2"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: gone ? 0 : 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: gone ? 0.35 : 0.2, ease: 'easeInOut' }}
+      className="absolute inset-0 z-30 flex items-center justify-center"
     >
-      {/* Rounds-style compact live status card */}
       <motion.div
-        initial={{ opacity: 0, y: -10, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: gone ? 0 : 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", stiffness: 260, damping: 18 }}
-        className={`w-full max-w-full min-w-0 mx-auto px-3 py-2 sm:px-5 sm:py-2.5 rounded-[24px] border flex items-center justify-center gap-2 sm:gap-2.5 select-none shadow-lg ${cardClass}`}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="relative w-full h-full overflow-hidden select-none flex items-center justify-center"
       >
-        {/* Result chip */}
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isWin ? 'bg-[#17A364] text-white' : 'bg-[#FF7F50] text-white'}`}>
-          <motion.svg
-            viewBox="0 0 24 24"
-            width="13"
-            height="13"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            animate={{ scale: [1, 1.15, 1], opacity: [0.8, 1, 0.8] }}
-            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-          >
-            {isWin ? <path d="M5 13l4 4L19 7" /> : <path d="M6 6l12 12M18 6L6 18" />}
-          </motion.svg>
-        </div>
+        {/* Subtle accent line on top */}
+        <motion.div
+          className="absolute top-0 left-0 h-[2px] w-full origin-left"
+          style={{
+            background: !isResultPhase
+              ? 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)'
+              : resultWon
+                ? 'linear-gradient(90deg, transparent, #17A364, transparent)'
+                : 'linear-gradient(90deg, transparent, #EF5350, transparent)',
+            boxShadow: isResultPhase ? `0 0 10px ${accentGlow}` : 'none',
+          }}
+          initial={false}
+          animate={{ scaleX: isResultPhase ? 1 : 0.3, opacity: isResultPhase ? 1 : 0.5 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+        />
 
-        {/* WIN / LOSS lettering — italic, tracking-widest, rounds style */}
-        <motion.span
-          animate={{ opacity: [1, 0.7, 1] }}
-          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-          className={`block min-w-0 text-center text-[13px] sm:text-[15px] font-black italic tracking-[0.18em] sm:tracking-widest ${textClass}`}
-          style={{ filter: `drop-shadow(0 0 10px ${isWin ? 'rgba(23,163,100,0.5)' : 'rgba(255,127,80,0.5)'})` }}
-        >
-          {isWin ? 'WIN' : 'LOSS'}
-        </motion.span>
+        {!isResultPhase ? (
+          /* ── SETTLING state ───────────────────────────────────── */
+          <div className="flex flex-col items-center gap-1.5">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={isLight ? {
+                background: 'radial-gradient(circle at 35% 30%, rgba(0,0,0,0.06), rgba(0,0,0,0.02) 60%, rgba(0,0,0,0.08))',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.12), inset 0 1px 2px rgba(255,255,255,0.7)'
+              } : {
+                background: 'radial-gradient(circle at 35% 30%, rgba(255,255,255,0.35), rgba(255,255,255,0.08) 60%, rgba(0,0,0,0.25))',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.40), inset 0 1px 2px rgba(255,255,255,0.40)'
+              }}
+            >
+              <div className={`w-4 h-4 rounded-full border-2 border-t-transparent animate-spin ${isLight ? 'border-black/60' : 'border-white/90'}`} />
+            </div>
+            <span
+              className={`text-[10px] font-black uppercase tracking-[0.25em] ${isLight ? 'text-black/60' : 'text-white/70'}`}
+            >
+              Settling
+            </span>
+          </div>
+        ) : (
+          /* ── VERDICT — Clean, staggered text without extra amounts or black duplicate ─────────────── */
+          <div className="flex items-center justify-center gap-3.5">
+            {/* Bare animated icons — no disc behind them. Win crackles
+                (spring in, electric pulse); loss slams down and smoulders. */}
+            {resultWon ? (
+              <motion.span
+                initial={{ scale: 0, rotate: -25 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 15, delay: 0.05 }}
+                className="shrink-0 flex"
+              >
+                <motion.span
+                  className="flex"
+                  animate={{ scale: [1, 1.18, 1], rotate: [0, -6, 5, 0] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ filter: `drop-shadow(0 0 10px ${isLight ? 'rgba(23,163,100,0.65)' : 'rgba(34,197,94,0.65)'})` }}
+                >
+                  <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={isLight ? 'text-[#17A364]' : 'text-[#22C55E]'}>
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </motion.span>
+              </motion.span>
+            ) : (
+              <motion.span
+                initial={{ scale: 0, y: -16 }}
+                animate={{ scale: 1, y: 0 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 13, delay: 0.05 }}
+                className="shrink-0 flex"
+              >
+                <motion.span
+                  className="flex"
+                  animate={{ x: [0, -1.5, 1.5, 0], opacity: [1, 0.72, 1] }}
+                  transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ filter: `drop-shadow(0 0 10px ${isLight ? 'rgba(198,40,40,0.55)' : 'rgba(239,83,80,0.65)'})` }}
+                >
+                  <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={isLight ? 'text-[#C62828]' : 'text-[#EF5350]'}>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </motion.span>
+              </motion.span>
+            )}
+
+            {/* Staggered non-italic letters */}
+            <div className="flex items-center gap-[1.5px] select-none">
+              {word.split('').map((char, index) => (
+                <motion.span
+                  key={`${word}-${index}`}
+                  initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{
+                    delay: 0.1 + index * 0.08,
+                    type: 'spring',
+                    stiffness: 380,
+                    damping: 20
+                  }}
+                  className={`text-[24px] font-black tracking-wider ${textColor}`}
+                >
+                  {char}
+                </motion.span>
+              ))}
+            </div>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );
@@ -356,17 +524,79 @@ export default function TradingWidget({
   const yesPayoutAmt = (stake / Math.max(0.01, yesShare)).toFixed(2);
   const noPayoutAmt = (stake / Math.max(0.01, noShare)).toFixed(2);
 
-  const didWin = (['WON', 'PAID'].includes(activeTrade?.status) || activeTrade?.won) === true;
-
   // When the progress beam has fully elapsed (expired) we hand off to the outcome icon
   // instead of leaving the beam stuck at 100%.
   const isPendingLive = ['PENDING', 'RESOLVING'].includes(activeTrade?.status);
-  const tradeExpired = progress >= 99.7;
   // Only a REAL backend verdict is a "settled outcome". A TIMEOUT (backend
   // unreachable / no record) or a still-unknown trade must NOT render as
   // WIN/LOSS — it stays on the neutral resolving spinner until it's removed.
   const settledOutcome = activeTrade && !isPendingLive &&
     (['WON', 'LOST', 'PAID'].includes(activeTrade.status) || typeof activeTrade.won === 'boolean');
+
+  // LATCHED RESULT — UserApp removes a settled trade from `activeTrades` after
+  // ~1s (the cleanup timer), which would unmount the result card mid-reveal.
+  // The card holds 5s. So the moment a real verdict lands, capture a
+  // snapshot here and keep showing it even after `activeTrade` goes null. A
+  // new PENDING trade (different id) clears the latch immediately so the next
+  // countdown is never blocked behind the old result.
+  const [latchedTrade, setLatchedTrade] = useState(null);
+  useEffect(() => {
+    if (settledOutcome && activeTrade) {
+      setLatchedTrade({ ...activeTrade });
+    }
+  }, [settledOutcome, activeTrade?.id]);
+  useEffect(() => {
+    if (activeTrade && latchedTrade && String(activeTrade.id) !== String(latchedTrade.id) &&
+        ['PENDING', 'RESOLVING'].includes(activeTrade.status)) {
+      setLatchedTrade(null);
+    }
+  }, [activeTrade?.id, latchedTrade?.id]);
+  useEffect(() => {
+    if (!latchedTrade) return;
+    // Backup for the card's own 5s timer — must outlive it.
+    const t = setTimeout(() => setLatchedTrade(null), 6000);
+    return () => clearTimeout(t);
+  }, [latchedTrade?.id]);
+
+  // The trade actually on display: live one if present, else the latched result.
+  const displayTrade = activeTrade || latchedTrade;
+  const displaySettled = settledOutcome || (!activeTrade && !!latchedTrade);
+  const displayDidWin = activeTrade
+    ? (['WON', 'PAID'].includes(activeTrade?.status) || activeTrade?.won) === true
+    : (['WON', 'PAID'].includes(latchedTrade?.status) || latchedTrade?.won) === true;
+  const showActionArea = !!activeTrade || isExecuting || !!latchedTrade;
+
+  // Expiry latches per trade id. Without this, the timer effect resets progress
+  // to 0 the moment the status flips to WON/LOST (or the trade is cleaned up),
+  // which un-fires the expiry and lets the PLACING branch render on top of a
+  // resolved trade - or with no trade at all. Once a countdown hits zero it
+  // stays hit for that trade. (Ref write during render is idempotent, so it
+  // is StrictMode-safe; the guard keeps the map bounded.)
+  const expiredIdsRef = useRef({});
+  const expiryKey = activeTrade?.id || latchedTrade?.id;
+  if (progress >= 99.7 && expiryKey) {
+    expiredIdsRef.current[expiryKey] = true;
+    if (Object.keys(expiredIdsRef.current).length > 50) expiredIdsRef.current = { [expiryKey]: true };
+  }
+  // Wall-clock expiry: rAF freezes in background tabs, so progress can sit at
+  // 30% forever while the countdown is long past. Timestamps don't freeze.
+  // (Backend rows use ms already; seconds are normalised — same rule as
+  // tradeStatus.isTradeOverdue.)
+  const rawStart = Number(activeTrade?.startTime || 0);
+  const startMs = rawStart > 1e12 ? rawStart : (rawStart > 0 ? rawStart * 1000 : 0);
+  const wallExpiryMs = Number(activeTrade?.expiryMs || 0) ||
+    (startMs && Number(activeTrade?.duration) ? startMs + Number(activeTrade.duration) * 1000 : 0);
+  const clockExpired = !!wallExpiryMs && Date.now() >= wallExpiryMs;
+  const tradeExpired = progress >= 99.7 || (!!expiryKey && !!expiredIdsRef.current[expiryKey]) ||
+    clockExpired || (!activeTrade && !!latchedTrade);
+
+  // The split card is taller than the countdown row, so the strip grows
+  // whenever it is on screen - during resolving AND during the settled reveal -
+  // and shrinks back for the countdown, placing and button states.
+  // (Countdown/placing are the first two branches below; anything else in the
+  // action area is the split card.)
+  const inLiveOrPlacing = (isPendingLive && !tradeExpired) || (isExecuting && !tradeExpired && !displaySettled && !latchedTrade);
+  const showSplit = showActionArea && !inLiveOrPlacing;
 
   const handleTrade = useCallback(async (direction) => {
     if (stake <= 0) return;
@@ -381,10 +611,11 @@ export default function TradingWidget({
   }, [stake, sessionBalance, selectedDuration, handleExecuteTrade]);
 
   const hasActiveTrade = !!activeTrade || isExecuting;
+  const displayBalance = sessionBalance || 0;
   const isLight = theme === 'light';
 
   return (
-    <div className={`w-full h-full rounded-2xl p-5 flex flex-col justify-between ${isLight ? 'bg-white' : 'bg-[#0a0a0a]'}`} style={{ fontFamily: '"Comfortaa", cursive', boxShadow: isLight ? '0 1px 0 rgba(255,255,255,0.05), 0 12px 32px rgba(0,0,0,0.10)' : '0 1px 0 rgba(255,255,255,0.03), 0 12px 32px rgba(0,0,0,0.35)' }}>
+    <div className={`w-full h-full rounded-2xl p-5 flex flex-col justify-between overflow-hidden ${isLight ? 'bg-white' : 'bg-[#0a0a0a]'}`} style={{ fontFamily: '"Comfortaa", cursive', boxShadow: isLight ? '0 1px 0 rgba(255,255,255,0.05), 0 12px 32px rgba(0,0,0,0.10)' : '0 1px 0 rgba(255,255,255,0.03), 0 12px 32px rgba(0,0,0,0.35)' }}>
       
       {/* Duration Section */}
       <div className="flex items-center justify-between mb-2">
@@ -415,6 +646,10 @@ export default function TradingWidget({
           STAKE 
           <div className={`w-3 h-3 rounded-full border flex items-center justify-center text-[8px] font-bold ${isLight ? 'border-gray-300 text-gray-500' : 'border-white/20 text-white/40'}`}>i</div>
         </div>
+        {/* Balance figure — signed-in users only. */}
+        {(address || sessionBalance > 0) && (
+          <div className={`text-[11px] ${isLight ? 'text-[#6B7280]' : 'text-white/40'}`}>Balance: {displayBalance.toFixed(4)} USDC</div>
+        )}
       </div>
       
       <div className="relative mb-4">
@@ -460,14 +695,18 @@ export default function TradingWidget({
         </div>
         <span className={isLight ? 'text-gray-300' : 'text-white/20'}>|</span>
         <div className="flex-1 flex items-center justify-center gap-1.5">
-          <span className="text-[#FF914D]">NO ${stake > 0 ? noPayoutAmt : "0.00"}</span>
+          <span className="text-[#EF5350]">NO ${stake > 0 ? noPayoutAmt : "0.00"}</span>
         </div>
       </div>
 
       {/* Action Area with Flip Clock, Progress Beam (Green -> Orange), and Realtime Result Tracker */}
-      <div className="relative h-[52px] mb-4">
+      <div
+        className={`relative mb-4 transition-all duration-300 ease-out ${
+          showSplit ? 'h-[104px] -mx-5' : 'h-[52px]'
+        }`}
+      >
         <AnimatePresence mode="popLayout">
-          {activeTrade || isExecuting ? (
+          {showActionArea ? (
             <motion.div
               key="active-trade"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -486,17 +725,32 @@ export default function TradingWidget({
                     {/* 2. PROGRESS BEAM — width = countdown progress, color = live win/lose tracker */}
                     <ProgressBeam progress={progress} isWinning={isWinning} />
                   </div>
-                ) : isExecuting && !tradeExpired ? (
-                  // Only show "placing" while the backend is confirming AND the countdown is still running.
+                ) : isExecuting && !tradeExpired && !displaySettled && !latchedTrade ? (
+                  // Only while genuinely placing: backend confirming AND countdown
+                  // still running AND no verdict on screen. A settled or latched
+                  // result always wins — placing must never cover it, however
+                  // isExecuting got stuck.
                   <div className="w-full text-center text-[#17A364] animate-pulse text-[16px] font-black tracking-widest flex items-center justify-center gap-2">
                     <div className="w-3 h-3 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
                     PLACING TRADE...
                   </div>
-                ) : !settledOutcome ? (
-                  // Countdown ended but the authoritative result hasn't landed yet -> brief resolving state
-                  <ResolvingOutcome isLight={isLight} />
                 ) : (
-                  <TradeOutcome won={didWin} isLight={isLight} />
+                  // Countdown done: the split card sits 50/50 with the spinner
+                  // in the middle while settling, then the winning side takes
+                  // over the whole card once the verdict lands.
+                  <TradeOutcome
+                    key={displayTrade?.id || 'result'}
+                    won={displayDidWin}
+                    isLight={isLight}
+                    settled={displaySettled}
+                    phase={displaySettled ? 'settled' : 'resolving'}
+                    amount={displayTrade?.amount}
+                    payout={displayTrade?.payout}
+                    entryPrice={displayTrade?.entryPrice}
+                    exitPrice={displayTrade?.exitPrice}
+                    symbol={displayTrade?.symbol}
+                    onExpire={() => setLatchedTrade(null)}
+                  />
                 )}
               </div>
             </motion.div>

@@ -165,7 +165,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                     <div className="flex items-center gap-2">
                       <div className={`
                         text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter
-                        ${trade.direction === 'UP' ? 'bg-[#17A364]/20 text-[#17A364]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
+                        ${trade.direction === 'UP' ? 'bg-[#17A364]/20 text-[#17A364]' : 'bg-[#EF5350]/20 text-[#EF5350]'}
                       `}>
                         {trade.direction === 'UP' ? 'LONG' : (trade.direction === 'DOWN' ? 'SHORT' : trade.direction)}
                       </div>
@@ -174,7 +174,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                       </span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className={`text-xs font-black uppercase ${isWin ? 'text-[#17A364]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                      <span className={`text-xs font-black uppercase ${isWin ? 'text-[#17A364]' : isLoss ? 'text-[#EF5350]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
                         {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                       </span>
                       {isWin && (trade.payoutSettled || trade.status === 'PAID') && (
@@ -261,7 +261,7 @@ export default function UserApp() {
   const { isConnected, address: wagmiAddress, chainId: connectedChainId, status } = useAccount();
   const { switchChain, switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
-  const { user, authenticated } = usePrivy();
+  const { user, authenticated, ready: privyReady } = usePrivy();
   const { wallets } = useWallets();
 
   // Smart wallet (ERC-4337 via Pimlico) — used for CCTP source-chain gas
@@ -1022,6 +1022,8 @@ const performStealthChecks = useCallback(async (addr) => {
     updateEvmSessionBal(force);
   }, [refetchEvmBalance, updateEvmSessionBal]);
 
+  const handleShare = useCallback((trade) => handleViewReceipt(trade), [handleViewReceipt]);
+
   // 2. Authoritative Profile & History Sync
   // 2. Authoritative Profile & History Sync (Unified Reconciler)
   const reconcileTrades = useCallback((backendAllRaw) => {
@@ -1090,12 +1092,8 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
             payout: bt.payout || local.payout,
           });
         } else {
-          const isOptimistic = local.isOptimistic === true;
-          const isPending = ['PENDING', 'RESOLVING'].includes(local.status);
-          const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
-          if ((isOptimistic && isPending) || (isPending && isRecent)) {
-            mergedMap.set(key, local);
-          }
+          // Retain all existing local history items (both settled and optimistic/pending)
+          mergedMap.set(key, local);
         }
       });
 
@@ -1132,9 +1130,21 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
         // Only keep in active view if not too old
         const maxAge = ((t.duration || 15) + 60) * 1000;
         if (now <= (expiryMs + GHOST_GRACE) && (now - normStart) <= maxAge) {
+          // Monotonic: a poll must never downgrade a settled verdict. The
+          // backend row can lag the socket (a Supabase write that failed and
+          // is still in the outbox), so a stale PENDING here would flip a WON
+          // card back to settling mid-reveal — or kill it entirely.
+          const rank = { PAID: 5, WON: 5, LOST: 5, PAYOUT_FAILED: 5, CANCELLED: 4, DISPUTE: 3, RESOLVING: 2, PENDING: 1, TIMEOUT: 0 };
+          const keepLocal = !!local && (rank[local.status] || 0) > (rank[t.status] || 0);
           mergedMap.set(key, {
             ...local,
             ...t,
+            ...(keepLocal ? {
+              status: local.status,
+              won: local.won,
+              exitPrice: local.exitPrice ?? t.exitPrice,
+              payout: local.payout ?? t.payout
+            } : null),
             startTime: normStart,
             expiryMs,
             confirmed: true
@@ -2105,12 +2115,107 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
     // 10s fallback poll — socket events handle instant updates; this guarantees
     // no trade ever strands in RESOLVING beyond a single poll cycle.
     const interval = setInterval(fetchTradeHistory, 10000);
+    // The moment a dead socket comes back, reconcile immediately: every live
+    // event in the gap was missed, and waiting out the poll shows stale rows.
+    const unbindConnect = socketService.onConnect(() => { fetchTradeHistory(); });
+
+    // Mobile browsers freeze timers when backgrounded; a trade that expired while
+    // away must re-sync the moment the user returns to the app.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchTradeHistory();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     return () => {
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      unbindConnect();
       settleCooldown.clear();
       notifiedBackendDown.current = false;
     };
   }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
+
+  // ── CLIENT-SIDE EXPIRY WATCHDOG ──────────────────────────────────────────────
+  // Guarantees a trade NEVER sits at countdown 0 in PENDING, or hangs in
+  // RESOLVING with no verdict, even when the socket is dead (common on mobile
+  // backgrounding / reconnect gaps).
+  //   1. A PENDING trade past its expiry flips to RESOLVING locally — NEUTRAL,
+  //      never a verdict: only the backend decides WON/LOST.
+  //   2. The moment it flips (or is already RESOLVING) we POST /trades/:id/settle
+  //      once per trade (3s cooldown) to pull the LOCKED verdict over HTTP — the
+  //      same authoritative lock the socket events would have delivered.
+  useEffect(() => {
+    if (!address) return;
+    const addr = address.toLowerCase();
+    const settleSoon = new Map(); // betId -> last HTTP force-settle attempt (ms)
+    let running = false;
+
+    const interval = setInterval(async () => {
+      if (running) return;
+      running = true;
+      try {
+        const now = Date.now();
+        const current = activeTradesRef.current || [];
+        for (const t of current) {
+          const st = t.status;
+          if (st !== 'PENDING' && st !== 'RESOLVING') continue;
+          const exp = t.expiryMs || ((t.startTime || t.timestamp || now) + ((t.duration || 15) * 1000));
+          if (now <= exp) continue;
+          const id = String(t.id || t.nonce || t.tx);
+          if (!id) continue;
+
+          // 1. PENDING -> RESOLVING (neutral transition; verdict still backend-only)
+          if (st === 'PENDING') {
+            setActiveTrades(prev => prev.map(x =>
+              (String(x.id || x.nonce || x.tx) === id) ? { ...x, status: 'RESOLVING' } : x
+            ));
+          }
+
+          // 2. Pull the locked verdict over HTTP (cooldown 3s per bet)
+          const last = settleSoon.get(id) || 0;
+          if (now - last < 3000) continue;
+          settleSoon.set(id, now);
+          try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 6000);
+            const res = await fetch(`${KEEPER_URL_ARC}/trades/${encodeURIComponent(id)}/settle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ address: addr }),
+              signal: controller.signal,
+            }).finally(() => clearTimeout(tid));
+            const sData = await res.json().catch(() => null);
+            if (res.ok && sData && (sData.status === 'WON' || sData.status === 'LOST')) {
+              const settledRec = {
+                ...t,
+                id, nonce: id,
+                status: sData.status,
+                won: !!sData.won,
+                entryPrice: sData.entryPrice ?? t.entryPrice,
+                exitPrice: sData.exitPrice,
+                settlementPrice: sData.exitPrice,
+                payout: sData.payout != null ? String(sData.payout) : t.payout,
+                settledAt: sData.settledAt || now,
+                backendSettled: true,
+                balanceApplied: true,
+              };
+              const upd = (x) => (String(x.id || x.nonce || x.tx) === id) ? { ...x, ...settledRec } : x;
+              setActiveTrades(prev => prev.map(upd));
+              setTradeHistory(prev => prev.some(x => String(x.id || x.nonce || x.tx) === id)
+                ? prev.map(upd)
+                : [settledRec, ...prev]);
+              // Socket may be dead — refresh balances so a WON payout lands even
+              // without the balance_update event.
+              updateEvmSessionBal(true);
+              refetchEvmBalance(true);
+            }
+          } catch { /* retried after cooldown; the 10s reconciler is the safety net */ }
+        }
+      } finally { running = false; }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [address, updateEvmSessionBal, refetchEvmBalance]);
 
   useEffect(() => {
     localStorage.setItem("15market_autosigner_fees", JSON.stringify(autoSignerFees));
@@ -2230,37 +2335,47 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
   }, [gameMode, roundsTradeHistory, tradeHistory, globalTickerTrades]);
 
   // ─── UNIFIED PRICE CONSUMPTION ───
-  // Uses the dedicated priceOracle service (priceSocketService) for ultra-low-latency
-  // UI pricing. The backend socket 'price' feed is deliberately NOT consumed here — it is
-  // the execution/settlement reference only.
+  // UI pricing is BACKEND-AUTHORITATIVE: the app consumes the engine's own
+  // 'price' broadcast (cache.prices — the exact feed settlement uses) so the
+  // terminal, chart and verdict can never disagree.
   const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, mon: 0, avax: 0, ts: {} });
   const [oraclePrices, setOraclePrices] = useState({ btc: 0, eth: 0, sol: 0, mon: 0, avax: 0 });
   const [streamStatus, setStreamStatus] = useState('connecting');
 
   useEffect(() => {
-    // 1. Unified High-Speed Price Stream (Terminal + Chart Consistency)
-    // We use the direct Pyth feed here to ensure the terminal price is as fluid as the chart.
-    const unbindDirect = priceSocketService.on('price', (data) => {
-      const { key, price, ts } = data;
-      if (oraclePricesRef.current[key] !== undefined) {
-        oraclePricesRef.current[key] = price;
-        oraclePricesRef.current.ts[key] = ts;
-        setStreamStatus('active');
-        lastPriceUpdateRef.current = Date.now();
+    // 1. Unified High-Speed Price Stream — BACKEND-AUTHORITATIVE.
+    // The chart, terminal and settlement MUST show the SAME price, otherwise a
+    // trade can look WON on the chart (client Pyth/Binance/MEXC feed) while the
+    // engine settles it LOST from its own feed (cache.prices) — and vice versa.
+    // So we ONLY accept the backend relayed 'price' events here ('backend' source).
+    // Every other client-side source is excluded on purpose.
+    const acceptBackendPrice = (key, price, ts) => {
+      if (oraclePricesRef.current[key] === undefined) return;
+      oraclePricesRef.current[key] = price;
+      oraclePricesRef.current.ts[key] = ts;
+      setStreamStatus('active');
+      lastPriceUpdateRef.current = Date.now();
 
-        // Immediate UI update if we were stuck at 0.00
-        if (priceRef.current === "0.00" || priceRef.current === "0") {
-          const pStr = (Math.floor(price * 100) / 100).toFixed(2);
-          setPrice(pStr);
-          priceRef.current = pStr;
-        }
+      // Immediate UI update if we were stuck at 0.00
+      if (priceRef.current === "0.00" || priceRef.current === "0") {
+        const pStr = (Math.floor(price * 100) / 100).toFixed(2);
+        setPrice(pStr);
+        priceRef.current = pStr;
       }
+    };
+
+    const unbindDirect = priceSocketService.on('price', (data) => {
+      // Only the backend relay feed is authoritative for the UI — this is the
+      // exact same price the settlement engine writes to cache.prices.
+      if (!data || data.source !== 'backend') return;
+      acceptBackendPrice(data.key, data.price, data.ts || Date.now());
     });
 
-    // 2. Backend Feed (Execution Reference)
-    // We still listen to the backend but it doesn't overwrite the high-speed UI stream.
+    // 2. Backend Feed via the app's MAIN socket (raw engine broadcast).
+    // Redundant path for the same authoritative events — keeps the UI stream
+    // alive even if the priceSocketService relay socket is down.
     const unbindBackend = socketService.on('price', (data) => {
-      // Just used for internal health/sync checks if needed
+      if (data && data.key) acceptBackendPrice(data.key, data.price, data.ts || Date.now());
     });
 
     // Watchdog: If no price update for any asset in 5 seconds, mark as stalled
@@ -2813,9 +2928,31 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
     // The frontend will receive 'balance_update' and 'trade_settled' events via Socket.io.
   }, [activeTrades, serverTimeOffset]);
 
-  // Safety Cleanup: Remove finalized trades after showing result
+  // isExecuting is only a placement-in-flight flag, but several flows can leave
+  // it true with no live trade behind it (failed validation after the flag was
+  // set, a remount mid-flight, a backgrounded tab). A stuck flag lets the
+  // PLACING branch cover settling/verdict states it must never cover, so
+  // release it once nothing is genuinely in flight. (The unresolved-submit
+  // path holds its own separate lock, untouched here.)
   useEffect(() => {
-    const finalStatuses = ["WON", "LOST", "PAID", "RESOLVING", "TIMEOUT", "PAYOUT_DELAYED", "PAYOUT_FAILED"];
+    if (!isExecuting) return;
+    const t = setTimeout(() => {
+      const live = (activeTradesRef.current || []).some(tr =>
+        ['PENDING', 'RESOLVING'].includes(tr.status));
+      if (!live && !unresolvedSubmitRef.current) setIsExecuting(false);
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [isExecuting]);
+
+  // Safety Cleanup: Remove finalized trades after showing result.
+  // RESOLVING is deliberately NOT in this list: it means "countdown done,
+  // verdict not yet landed". Deleting it here removed the trade (and
+  // blacklisted its id) about a second after the watchdog flipped it — on a
+  // slow network the verdict always arrived after the deletion, so the
+  // result card never had anything to show. Undecided trades wait for a real
+  // verdict or a TIMEOUT conversion, which is final and is collected below.
+  useEffect(() => {
+    const finalStatuses = ["WON", "LOST", "PAID", "TIMEOUT", "PAYOUT_DELAYED", "PAYOUT_FAILED"];
     const finished = activeTrades.filter(t => finalStatuses.includes(t.status));
 
     finished.forEach(trade => {
@@ -3627,6 +3764,7 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
                   <LeftSidebar
                     sessionBalance={sessionBalance}
                     evmBalance={evmBalance}
+                    isLoggedIn={privyReady && (authenticated || !!address)}
                     activeMarket={activeMarket}
                     setActiveMarket={handleMarketChange}
                     defaultTokens={defaultTokens}
@@ -3721,7 +3859,7 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
                       activeTrades={activeTrades}
                       theme={theme}
                       onViewReceipt={handleViewReceipt}
-                      onShare={handleViewReceipt}
+                      onShare={handleShare}
                       isExpanded={showFullHistory}
                       onToggleExpand={() => setShowFullHistory(!showFullHistory)}
                     />
@@ -3756,9 +3894,9 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
                evmBalance={evmBalance}
                onDeposit={handleDeposit}
                 onWithdraw={handleWithdraw}
-                 transactionHistory={transactionHistory}
-                 onViewReceipt={handleViewReceipt}
-                 notify={notify}
+                transactionHistory={transactionHistory}
+                onViewReceipt={handleViewReceipt}
+                notify={notify}
              />
             </Suspense>
            
