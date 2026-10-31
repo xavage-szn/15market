@@ -1751,7 +1751,7 @@ const statusOrder = { "PAID": 5, "WON": 5, "LOST": 5, "PAYOUT_FAILED": 5, "CANCE
               : t
           ));
 
-          notify('Trade Active ✓', 'success');
+          // No confirmation screen on open — the live trade card is the feedback.
           setIsExecuting(false);
           executeLockRef.current = false;
 
